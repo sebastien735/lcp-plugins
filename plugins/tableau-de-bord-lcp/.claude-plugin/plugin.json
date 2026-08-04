@@ -1,0 +1,9 @@
+{
+  "name": "tableau-de-bord-lcp",
+  "version": "1.0.0",
+  "description": "Tableau de bord des Cuisiniers du Potager : CA facturé, mois en cours, impayés, comparaison 2024/2025 et projection annuelle, connecté à l'Odoo de production en temps réel.",
+  "author": {
+    "name": "Les Cuisiniers du Potager"
+  },
+  "keywords": ["tableau-de-bord", "odoo", "ca", "facturation", "impayes", "projection"]
+}
