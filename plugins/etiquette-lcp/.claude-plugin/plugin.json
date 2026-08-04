@@ -1,0 +1,9 @@
+{
+  "name": "etiquette-lcp",
+  "version": "1.0.0",
+  "description": "Générateur de Fiche Étiquette des Cuisiniers du Potager : ingrédients réellement consommés, valeurs nutritionnelles, taux de réduction et transfert vers Illustrator, connecté à Odoo en temps réel.",
+  "author": {
+    "name": "Les Cuisiniers du Potager"
+  },
+  "keywords": ["etiquette", "odoo", "agroalimentaire", "inco", "illustrator"]
+}
