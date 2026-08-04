@@ -1,0 +1,18 @@
+{
+  "name": "lcp-plugins",
+  "owner": {
+    "name": "Les Cuisiniers du Potager",
+    "email": "sebastien@lescuisiniersdupotager.com"
+  },
+  "metadata": {
+    "description": "Plugins internes des Cuisiniers du Potager, connectés à l'Odoo de production."
+  },
+  "plugins": [
+    {
+      "name": "tableau-de-bord-lcp",
+      "source": "./plugins/tableau-de-bord-lcp",
+      "description": "Tableau de bord : CA facturé, mois en cours, impayés, comparaison 2024/2025 et projection annuelle, en direct d'Odoo.",
+      "version": "1.0.0"
+    }
+  ]
+}
