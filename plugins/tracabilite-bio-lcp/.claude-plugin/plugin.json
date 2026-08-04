@@ -1,0 +1,9 @@
+{
+  "name": "tracabilite-bio-lcp",
+  "version": "1.0.0",
+  "description": "Traçabilité BIO des Cuisiniers du Potager : réceptions, fabrications, consommations et livraisons des lots bio, avec généalogie amont/aval, à partir d'Odoo de production.",
+  "author": {
+    "name": "Les Cuisiniers du Potager"
+  },
+  "keywords": ["tracabilite", "bio", "odoo", "lots", "genealogie", "certification"]
+}
