@@ -13,6 +13,24 @@
       "source": "./plugins/tableau-de-bord-lcp",
       "description": "Tableau de bord : CA facturé, mois en cours, impayés, comparaison 2024/2025 et projection annuelle, en direct d'Odoo.",
       "version": "1.0.0"
+    },
+    {
+      "name": "etiquette-lcp",
+      "source": "./plugins/etiquette-lcp",
+      "description": "Générateur de Fiche Étiquette : ingrédients réellement consommés, valeurs nutritionnelles, taux de réduction et transfert vers Illustrator, en direct d'Odoo.",
+      "version": "1.0.0"
+    },
+    {
+      "name": "stock-fruits-legumes-lcp",
+      "source": "./plugins/stock-fruits-legumes-lcp",
+      "description": "Stock fruits & légumes par client : lots en stock net, répartition BIO/non-BIO, cartes clients et réceptions, en direct d'Odoo.",
+      "version": "1.0.0"
+    },
+    {
+      "name": "tracabilite-bio-lcp",
+      "source": "./plugins/tracabilite-bio-lcp",
+      "description": "Traçabilité BIO : réceptions, fabrications, consommations et livraisons des lots bio, avec généalogie amont/aval, depuis Odoo.",
+      "version": "1.0.0"
     }
   ]
 }
