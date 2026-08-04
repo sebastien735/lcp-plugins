@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tableau de bord — Les Cuisiniers du Potager</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root{ color-scheme: light;
+  --bg:#f5f7f4; --card:#ffffff; --ink:#1c2620; --muted:#6b7a70;
+  --line:#e2e8e0; --green:#2e7d32; --green-2:#66bb6a; --amber:#c77700;
+  --red:#c62828; --blue:#1565c0; --gray:#9aa8a0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:14px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 22px 60px}
+header.hd{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:4px}
+h1{font-size:22px;margin:0;font-weight:650;letter-spacing:-.2px}
+.sub{color:var(--muted);font-size:12.5px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:22px 0 8px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 16px 14px;
+  box-shadow:0 1px 2px rgba(20,40,25,.04)}
+.kpi .lbl{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.kpi .val{font-size:26px;font-weight:700;margin-top:6px;letter-spacing:-.5px}
+.kpi .meta{color:var(--muted);font-size:12px;margin-top:3px}
+.kpi.accent-green{border-top:3px solid var(--green)}
+.kpi.accent-blue{border-top:3px solid var(--blue)}
+.kpi.accent-red{border-top:3px solid var(--red)}
+.kpi.accent-amber{border-top:3px solid var(--amber)}
+.banner{background:linear-gradient(90deg,#2e7d32,#43a047);color:#fff;border-radius:14px;
+  padding:16px 20px;margin:14px 0 4px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.banner .big{font-size:24px;font-weight:750}
+.banner .cap{font-size:12.5px;opacity:.92}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.panel h2{font-size:14px;margin:0 0 12px;font-weight:650;color:var(--ink)}
+.panel h2 .h2meta{color:var(--muted);font-weight:500;font-size:12.5px}
+.chart-box{position:relative;height:300px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr:hover{background:#f3f7f2}
+a.rowlink{color:var(--blue);text-decoration:none;font-weight:600}
+a.rowlink:hover{text-decoration:underline}
+.tag-late{color:var(--red);font-weight:600}
+.tables{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.scroll{max-height:340px;overflow:auto}
+.loading,.err{padding:40px;text-align:center;color:var(--muted)}
+.err{color:var(--red)}
+.foot{margin-top:26px;color:var(--gray);font-size:11.5px;text-align:center}
+@media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.grid2,.tables{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hd">
+    <div>
+      <h1>Tableau de bord</h1>
+      <div class="sub">Les Cuisiniers du Potager · CA facturé HT · données live Odoo</div>
+    </div>
+    <div class="sub" id="asof">…</div>
+  </header>
+
+  <div id="app">
+    <div class="loading">Chargement des données Odoo…</div>
+  </div>
+
+  <div class="foot">
+    CA = factures clients validées (HT), datées sur la date de facture. Impayés = solde restant dû.
+    Historique 2024/2025 : exports de l'ancien logiciel comptable (2025 redressé à 387 000 € HT).
+    Cliquez sur une ligne pour ouvrir la fiche dans Odoo.
+  </div>
+</div>
+
+<script>
+const ODOO = 'mcp__odoo19_prod__odoo_call';
+const BASE_URL = 'https://www.lescuisiniersdupotager.com';
+const MONTHS = ['Janv','Févr','Mars','Avr','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'];
+
+// ---- Exclusions "à facturer" ----
+// Commandes facturées puis avoirées : exclues automatiquement (avoir posté détecté).
+const EXCLUDE_ORDER_IDS = [];       // exclusions manuelles par n° de commande (id sale.order)
+const EXCLUDE_PARTNER_IDS = [396];  // clients jamais facturés — 396 = Le Pot Commun
+
+// ---- Historique de référence (constantes validées) ----
+const H2024 = [4554.40,16251.90,10234.20,19906.16,36388.61,25765.44,36634.47,38075.08,19116.04,45841.46,58932.45,11114.94];
+// 2025 redressé (facteur 1.199098, total retenu 387 000 €)
+const H2025 = [7220.51,2684.06,5731.93,3679.31,33366.82,32903.54,57556.79,41243.97,40629.45,65412.60,62585.32,33985.69];
+const TOTAL_2024 = 322815.15;
+const TOTAL_2025 = 387000;
+const BASE = H2024.map((v,i)=>0.4*v + 0.6*H2025[i]);
+
+const eur = new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0});
+const eur2 = new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2});
+const pct = n => (n>=0?'+':'') + n.toLocaleString('fr-FR',{maximumFractionDigits:1}) + ' %';
+const fdate = s => { if(!s) return '—'; const [y,m,d]=s.slice(0,10).split('-'); return `${d}/${m}/${y}`; };
+
+function parseOdoo(r){
+  if(!r) throw new Error('Réponse vide');
+  if(r.isError){ throw new Error(r.content && r.content[0] && r.content[0].text ? r.content[0].text : 'Erreur MCP'); }
+  let payload = r.structuredContent;
+  if(payload==null && r.content && r.content[0] && r.content[0].text){
+    try{ payload = JSON.parse(r.content[0].text); }catch(e){ payload = r.content[0].text; }
+  }
+  let data = payload;
+  if(data && typeof data==='object' && !Array.isArray(data) && 'result' in data) data = data.result;
+  if(typeof data==='string') data = JSON.parse(data);
+  return data;
+}
+async function call(model, method, params){
+  const r = await window.cowork.callMcpTool(ODOO, {model, method, params});
+  return parseOdoo(r);
+}
+
+const now = new Date();
+const YEAR = now.getFullYear();
+const curMonth = now.getMonth();               // 0-11
+const dayOfMonth = now.getDate();
+const daysInMonth = new Date(YEAR, curMonth+1, 0).getDate();
+
+async function load(){
+  const [caRows, unpaid] = await Promise.all([
+    call('account.move','read_group',{
+      domain:[['move_type','=','out_invoice'],['state','=','posted'],
+              ['invoice_date','>=',`${YEAR}-01-01`],['invoice_date','<=',`${YEAR}-12-31`]],
+      fields:['amount_untaxed:sum'], groupby:['invoice_date:month']}),
+    call('account.move','search_read',{
+      domain:[['move_type','=','out_invoice'],['state','=','posted'],
+              ['payment_state','in',['not_paid','partial']]],
+      fields:['name','partner_id','amount_residual','amount_total','invoice_date','invoice_date_due'],
+      order:'invoice_date_due asc', limit:200})
+  ]);
+
+  // ---- CA mensuel 2026 (par n° de mois via __range.from) ----
+  const actual = new Array(12).fill(0);
+  const counts = new Array(12).fill(0);
+  for(const row of caRows){
+    const from = row.__range && row.__range['invoice_date:month'] && row.__range['invoice_date:month'].from;
+    if(!from) continue;
+    const m = parseInt(from.slice(5,7),10) - 1;
+    actual[m] = row.amount_untaxed || 0;
+    counts[m] = row.invoice_date_count || 0;
+  }
+  const ytd = actual.reduce((a,b)=>a+b,0);
+  const ytdCount = counts.reduce((a,b)=>a+b,0);
+
+  // ---- Projection ----
+  let actualCompleted=0, baseCompleted=0;
+  for(let i=0;i<curMonth;i++){ actualCompleted+=actual[i]; baseCompleted+=BASE[i]; }
+  const g = baseCompleted>0 ? actualCompleted/baseCompleted : 1;
+  // mois en cours : on mélange l'extrapolation du réel et l'attendu historique,
+  // pondéré par l'avancement dans le mois → évite le "trou" en début de mois.
+  const fracElapsed = daysInMonth>0 ? Math.min(dayOfMonth/daysInMonth, 1) : 1;
+  const proj = new Array(12);
+  for(let i=0;i<12;i++){
+    if(i<curMonth){ proj[i]=actual[i]; }
+    else if(i===curMonth){
+      const expected = BASE[i]*g;
+      const extrap = dayOfMonth>0 ? actual[i]*(daysInMonth/dayOfMonth) : expected;
+      proj[i] = fracElapsed*extrap + (1-fracElapsed)*expected;
+    }
+    else { proj[i]= BASE[i]*g; }
+  }
+  const projTotal = proj.reduce((a,b)=>a+b,0);
+
+  // ---- Impayés / à facturer ----
+  const unpaidTotal = unpaid.reduce((a,r)=>a+(r.amount_residual||0),0);
+
+  render({actual,counts,ytd,ytdCount,g,proj,projTotal,unpaid,unpaidTotal});
+}
+
+function render(d){
+  document.getElementById('asof').textContent =
+    'au ' + now.toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'}) +
+    ' · ' + now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="kpis">
+      <div class="kpi accent-green">
+        <div class="lbl">CA facturé ${YEAR}</div>
+        <div class="val">${eur2.format(d.ytd)}</div>
+        <div class="meta">${d.ytdCount} factures · cumul à date</div>
+      </div>
+      <div class="kpi accent-blue">
+        <div class="lbl">Mois en cours — ${MONTHS[curMonth]}.</div>
+        <div class="val">${eur2.format(d.actual[curMonth]||0)}</div>
+        <div class="meta">${d.counts[curMonth]||0} factures</div>
+      </div>
+      <div class="kpi accent-red">
+        <div class="lbl">Impayés</div>
+        <div class="val">${eur2.format(d.unpaidTotal)}</div>
+        <div class="meta">${d.unpaid.length} factures ouvertes</div>
+      </div>
+    </div>
+
+    <div class="banner">
+      <div><div class="cap">Projection ${YEAR} (fin d'année, au rythme actuel)</div>
+        <div class="big">${eur.format(d.projTotal)}</div></div>
+      <div style="text-align:right">
+        <div class="cap">Rythme vs base pondérée</div>
+        <div class="big">${pct((d.g-1)*100)}</div>
+        <div class="cap">base = 40 % 2024 + 60 % 2025 · réf. 2024 ${eur.format(TOTAL_2024)} · 2025 ${eur.format(TOTAL_2025)}</div>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="panel">
+        <h2>Cumul annuel <span class="h2meta">— 2024 / 2025 / ${YEAR} (+ projection)</span></h2>
+        <div class="chart-box"><canvas id="cumChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>CA mensuel <span class="h2meta">— 2024 · 2025 · ${YEAR} (réel + projeté)</span></h2>
+        <div class="chart-box"><canvas id="monChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="tables">
+      <div class="panel" style="grid-column:1 / -1">
+        <h2>Impayés <span class="h2meta">— ${d.unpaid.length} factures · ${eur2.format(d.unpaidTotal)}</span></h2>
+        <div class="scroll">${tableUnpaid(d.unpaid)}</div>
+      </div>
+    </div>
+  `;
+
+  drawCumChart(d);
+  drawMonChart(d);
+}
+
+function link(id, model){ return `${BASE_URL}/web#id=${id}&model=${model}&view_type=form`; }
+
+function tableUnpaid(rows){
+  if(!rows.length) return '<div class="loading">Aucun impayé.</div>';
+  const today = now.toISOString().slice(0,10);
+  return `<table><thead><tr><th>Facture</th><th>Client</th><th>Échéance</th><th class="num">Solde dû</th></tr></thead><tbody>${
+    rows.map(r=>{
+      const late = r.invoice_date_due && r.invoice_date_due < today;
+      const cli = r.partner_id ? r.partner_id[1] : '—';
+      return `<tr>
+        <td><a class="rowlink" href="${link(r.id,'account.move')}" target="_blank" rel="noopener">${r.name||r.id}</a></td>
+        <td>${cli}</td>
+        <td class="${late?'tag-late':''}">${fdate(r.invoice_date_due)}${late?' ⚑':''}</td>
+        <td class="num">${eur2.format(r.amount_residual||0)}</td>
+      </tr>`;
+    }).join('')
+  }</tbody></table>`;
+}
+
+function tableToInvoice(rows){
+  if(!rows.length) return '<div class="loading">Rien à facturer.</div>';
+  return `<table><thead><tr><th>Commande</th><th>Client</th><th>Date</th><th class="num">Montant HT</th></tr></thead><tbody>${
+    rows.map(r=>{
+      const cli = r.partner_id ? r.partner_id[1] : '—';
+      return `<tr>
+        <td><a class="rowlink" href="${link(r.id,'sale.order')}" target="_blank" rel="noopener">${r.name||r.id}</a></td>
+        <td>${cli}</td>
+        <td>${fdate(r.date_order)}</td>
+        <td class="num">${eur2.format(r.amount_untaxed||0)}</td>
+      </tr>`;
+    }).join('')
+  }</tbody></table>`;
+}
+
+function excludedNote(ex){
+  if(!ex || !ex.length) return '';
+  const items = ex.map(([o,reason])=>{
+    const cli = o.partner_id ? o.partner_id[1] : '—';
+    return `<a class="rowlink" href="${link(o.id,'sale.order')}" target="_blank" rel="noopener">${o.name||o.id}</a> · ${cli} <span style="color:var(--muted)">(${reason})</span>`;
+  }).join(' — ');
+  return `<div style="margin-top:10px;font-size:11.5px;color:var(--muted)">
+    ${ex.length} commande(s) exclue(s) : ${items}</div>`;
+}
+
+function cumulate(arr, upto){ // upto inclusive index, else full
+  const out=[]; let s=0;
+  for(let i=0;i<12;i++){ s+=arr[i]; out.push((upto==null||i<=upto)? +s.toFixed(2) : null); }
+  return out;
+}
+
+function drawCumChart(d){
+  const cum2024 = cumulate(H2024);
+  const cum2025 = cumulate(H2025);
+  const cumActual = cumulate(d.actual, curMonth);
+  // projection line : ancrée au dernier mois plein, puis cumul projeté
+  let running = 0; const cumProj = new Array(12).fill(null);
+  let acc = 0; for(let i=0;i<curMonth;i++) acc += d.actual[i];   // cumul réel des mois pleins
+  if(curMonth-1>=0) cumProj[curMonth-1] = +acc.toFixed(2);
+  running = acc;
+  for(let i=curMonth;i<12;i++){ running += d.proj[i]; cumProj[i] = +running.toFixed(2); }
+
+  new Chart(document.getElementById('cumChart'),{
+    type:'line',
+    data:{ labels:MONTHS, datasets:[
+      {label:'2024', data:cum2024, borderColor:'#9aa8a0', backgroundColor:'transparent', borderWidth:2, tension:.25, pointRadius:0},
+      {label:'2025', data:cum2025, borderColor:'#1565c0', backgroundColor:'transparent', borderWidth:2, tension:.25, pointRadius:0},
+      {label:`${YEAR} réel`, data:cumActual, borderColor:'#2e7d32', backgroundColor:'rgba(46,125,50,.08)', borderWidth:3, tension:.25, pointRadius:2, fill:true},
+      {label:`${YEAR} projeté`, data:cumProj, borderColor:'#2e7d32', backgroundColor:'transparent', borderWidth:2, borderDash:[6,5], tension:.25, pointRadius:0, spanGaps:true}
+    ]},
+    options:baseOpts('€')
+  });
+}
+
+function drawMonChart(d){
+  const real = d.actual.map((v,i)=> i<=curMonth ? +v.toFixed(2) : null);
+  const projFuture = d.proj.map((v,i)=> i>=curMonth ? +v.toFixed(2) : null);
+  const base = BASE.map(v=>+v.toFixed(2));
+  new Chart(document.getElementById('monChart'),{
+    type:'bar',
+    data:{ labels:MONTHS, datasets:[
+      {label:'2024', data:H2024.map(v=>+v.toFixed(2)), backgroundColor:'#c3cdc6', borderRadius:4},
+      {label:'2025', data:H2025.map(v=>+v.toFixed(2)), backgroundColor:'#64a3d8', borderRadius:4},
+      {label:`${YEAR} réel`, data:real, backgroundColor:'#2e7d32', borderRadius:4},
+      {label:`${YEAR} projeté`, data:projFuture, backgroundColor:'rgba(102,187,106,.55)', borderRadius:4}
+    ]},
+    options:baseOpts('€')
+  });
+}
+
+function baseOpts(){
+  return {responsive:true, maintainAspectRatio:false,
+    interaction:{mode:'index',intersect:false},
+    plugins:{ legend:{labels:{boxWidth:12,usePointStyle:true,font:{size:11}}},
+      tooltip:{callbacks:{label:c=> `${c.dataset.label}: ${c.parsed.y!=null?eur2.format(c.parsed.y):'—'}`}}},
+    scales:{ y:{ticks:{callback:v=> (v/1000).toLocaleString('fr-FR')+' k€'},grid:{color:'#eef2ee'}},
+      x:{grid:{display:false}} } };
+}
+
+load().catch(err=>{
+  console.error(err);
+  document.getElementById('app').innerHTML =
+    `<div class="err">Impossible de charger les données Odoo.<br><small>${(err&&err.message)||err}</small></div>`;
+});
+</script>
+</body>
+</html>
