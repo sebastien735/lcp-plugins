@@ -1,0 +1,9 @@
+{
+  "name": "stock-fruits-legumes-lcp",
+  "version": "1.0.0",
+  "description": "Stock fruits & légumes par client des Cuisiniers du Potager : lots en stock net, KPIs, répartition BIO/non-BIO par client, cartes clients et réceptions, connecté à l'Odoo de production en temps réel.",
+  "author": {
+    "name": "Les Cuisiniers du Potager"
+  },
+  "keywords": ["stock", "odoo", "fruits-legumes", "clients", "bio", "receptions"]
+}
