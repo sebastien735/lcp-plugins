@@ -1,0 +1,1512 @@
+<!DOCTYPE html><script type="application/json" id="cowork-artifact-meta">
+{
+  "name": "Etiquette Lcp",
+  "schemaVersion": 1,
+  "description": "Générateur de Fiche Étiquette pour les graphistes des Cuisiniers du Potager. Connecté à Odoo prod en temps réel : produits à l'étiquetage, ingrédients réellement consommés triés par poids, contrôles qualité, lot, nombre de bocaux, et valeurs nutritionnelles saisies/partagées par produit.",
+  "mcpTools": [
+    "mcp__odoo19_prod__odoo_call"
+  ],
+  "mcpServerNames": [
+    "odoo19_prod"
+  ]
+}
+</script>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fiche Étiquette — CDP</title>
+<style>
+:root {
+  color-scheme: light;
+  --green: #1b5e3b;
+  --green2: #2e7d52;
+  --green-bg: #e8f5ee;
+  --bg: #f4f3f0;
+  --white: #ffffff;
+  --border: #dedad4;
+  --text: #1a1a1a;
+  --muted: #6b6b6b;
+  --amber: #fff8e1;
+  --amber-b: #e9b800;
+  --red: #c62828;
+  --r: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+/* Header */
+.hdr { background: var(--green); color: #fff; padding: 13px 20px; display: flex; align-items: center; gap: 10px; }
+.hdr-title { font-size: 16px; font-weight: 700; }
+.hdr-sub { font-size: 11px; opacity: .6; margin-top: 1px; }
+
+/* Search */
+.srch { background: #fff; border-bottom: 1px solid var(--border); padding: 12px 20px; position: sticky; top: 0; z-index: 100; }
+.srch-row { display: flex; gap: 8px; }
+.srch-input {
+  flex: 1; padding: 9px 13px; border: 1.5px solid var(--border);
+  border-radius: 8px; font-size: 14px; outline: none; background: var(--bg); transition: border-color .15s;
+}
+.srch-input:focus { border-color: var(--green); background: #fff; }
+.btn { padding: 8px 15px; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
+.btn:hover { opacity: .82; }
+.btn-g { background: var(--green); color: #fff; }
+.btn-o { background: #fff; color: var(--text); border: 1.5px solid var(--border); }
+.btn-xs { padding: 4px 10px; font-size: 11px; }
+
+/* Dropdown */
+.drop {
+  position: absolute; top: 100%; left: 20px; right: 20px;
+  background: #fff; border: 1.5px solid var(--border); border-top: none;
+  border-radius: 0 0 var(--r) var(--r); max-height: 380px; overflow-y: auto;
+  display: none; z-index: 300; box-shadow: 0 8px 24px rgba(0,0,0,.1);
+}
+.drop.open { display: block; }
+.drop-section { padding: 6px 14px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); background: var(--bg); border-bottom: 1px solid var(--border); }
+.drop-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background .1s; }
+.drop-row:last-child { border-bottom: none; }
+.drop-row:hover { background: var(--green-bg); }
+.drop-row.product-row { padding-left: 20px; }
+.d-ref { font-size: 11px; font-weight: 700; color: var(--green); }
+.d-name { font-size: 13px; margin-top: 1px; }
+.d-last-mo { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 500; }
+.b-done { background: #e8f5e9; color: #2e7d32; }
+.b-prog { background: #fff3e0; color: #e65100; }
+.b-conf { background: #e3f2fd; color: #1565c0; }
+
+/* Layout */
+.wrap { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+
+/* Tabs */
+.tabs { display: flex; gap: 2px; background: var(--bg); border-radius: 8px; padding: 3px; border: 1px solid var(--border); width: fit-content; }
+.tab { padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted); transition: all .15s; }
+.tab.active { background: #fff; color: var(--green); box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+
+/* Cards */
+.card { background: #fff; border-radius: var(--r); border: 1px solid var(--border); overflow: hidden; }
+.card-h { display: flex; justify-content: space-between; align-items: center; padding: 11px 15px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.card-h-title { font-size: 11px; font-weight: 700; color: var(--green); text-transform: uppercase; letter-spacing: .5px; }
+.card-b { padding: 15px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+/* Info items */
+.info-g { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ii label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 3px; }
+.ii .v { font-size: 15px; font-weight: 500; }
+.ii .vbig { font-size: 24px; font-weight: 800; color: var(--green); }
+.ii .vbig span { font-size: 12px; font-weight: 400; color: var(--muted); }
+.full { grid-column: 1 / -1; }
+
+/* Chips */
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; background: var(--green-bg); border-radius: 99px; font-size: 11px; color: var(--green); font-weight: 600; }
+
+/* Ingredients table */
+.ing-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ing-table th { font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); padding: 7px 10px; border-bottom: 2px solid var(--border); text-align: left; background: var(--bg); }
+.ing-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.ing-table tr:last-child td { border-bottom: none; }
+.ing-table tr:hover td { background: #fcfaf8; }
+.ing-num { width: 28px; color: var(--muted); font-size: 11px; text-align: center; }
+.ing-drag { width: 20px; color: #ccc; cursor: grab; text-align: center; }
+.ing-name-cell { }
+.ing-qty { text-align: right; color: var(--muted); white-space: nowrap; }
+.ing-lot { font-size: 11px; color: var(--muted); }
+.drag-over td { background: var(--green-bg) !important; }
+.dragging { opacity: .3; }
+
+/* QC grid */
+.qc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.qc-card { border-radius: 8px; padding: 10px 12px; background: var(--bg); border-left: 3px solid #ccc; text-align: center; }
+.qc-card.pass { border-left-color: #43a047; }
+.qc-card.fail { border-left-color: #e53935; }
+.qc-card.none { border-left-color: #bdbdbd; }
+.qc-title { font-size: 10px; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+.qc-val { font-size: 19px; font-weight: 800; }
+.qc-unit { font-size: 10px; color: var(--muted); }
+
+/* Nutri section */
+.nutri-note { font-size: 12px; color: #7a5c00; background: var(--amber); border: 1px solid var(--amber-b); border-radius: 6px; padding: 8px 12px; margin-bottom: 14px; }
+.nutri-wrap { overflow-x: auto; }
+.nutri-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 700px; }
+.nutri-table th { font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); padding: 6px 8px; border-bottom: 2px solid var(--border); text-align: right; background: var(--bg); white-space: nowrap; }
+.nutri-table th.left { text-align: left; }
+.nutri-table th.qty-col { text-align: right; min-width: 80px; }
+.nutri-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); text-align: right; vertical-align: middle; }
+.nutri-table td.left { text-align: left; font-weight: 500; white-space: nowrap; }
+.nutri-table td.lot-cell { font-size: 10px; color: var(--muted); text-align: left; }
+.nutri-table td.qty-cell { white-space: nowrap; color: var(--muted); }
+.nutri-table tr:last-child td { border-bottom: none; }
+.nutri-table tr.total-row td { background: var(--green-bg); font-weight: 700; color: var(--green); border-top: 2px solid var(--green); font-size: 13px; }
+.nutri-table tr.total-row td.left { font-size: 13px; }
+.ni { width: 62px; padding: 3px 5px; border: 1.5px solid var(--border); border-radius: 5px; font-size: 12px; text-align: right; }
+.ni:focus { outline: none; border-color: var(--green); }
+
+/* Sous-ingrédients (ingrédient composé) */
+.sub-ing-inp { display:block; width:100%; max-width:340px; margin-top:4px; padding:3px 7px; border:1px dashed var(--border); border-radius:5px; font-size:11px; color:var(--muted); background:#fcfaf8; }
+.sub-ing-inp:focus { outline:none; border-color:var(--green); border-style:solid; color:var(--text); background:#fff; }
+.sub-ing-inp::placeholder { color:#bbb; font-style:italic; }
+
+/* Result nutri table */
+.res-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.res-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.res-table tr:last-child td { border-bottom: none; }
+.res-table .sub td:first-child { padding-left: 22px; color: var(--muted); font-size: 12px; }
+.res-table td:not(:first-child) { text-align: right; font-weight: 600; }
+.res-table .hd td { font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); font-weight: 400; background: var(--bg); }
+
+/* Label preview */
+.lbl-box { border: 2px dashed var(--border); border-radius: 8px; padding: 20px 24px; font-family: Georgia, serif; background: #fff; }
+.lbl-name { font-size: 22px; font-weight: bold; color: var(--green); margin-bottom: 2px; }
+.lbl-ref { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+.lbl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.lbl-sec { font-size: 9px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 3px; margin-bottom: 6px; margin-top: 14px; font-family: sans-serif; }
+.lbl-sec:first-child { margin-top: 0; }
+.lbl-txt { font-size: 11px; line-height: 1.6; }
+.lbl-line { font-size: 12px; margin-bottom: 3px; }
+.lbl-nt { font-size: 10px; width: 100%; border-collapse: collapse; }
+.lbl-nt td { padding: 2px 0; border-bottom: 1px solid #f0f0f0; }
+.lbl-nt td:last-child { text-align: right; }
+.lbl-nt .lsub td:first-child { padding-left: 12px; color: var(--muted); }
+
+/* Empty / loading */
+.empty { text-align: center; padding: 70px 20px; color: var(--muted); }
+.empty-icon { font-size: 50px; margin-bottom: 12px; }
+.empty-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.empty-sub { font-size: 13px; max-width: 340px; margin: 0 auto; line-height: 1.5; }
+.spin-wrap { display: flex; align-items: center; justify-content: center; padding: 60px; gap: 10px; color: var(--muted); }
+.spinner { width: 20px; height: 20px; border: 2.5px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin .65s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.toast { position: fixed; bottom: 22px; right: 22px; background: var(--green); color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; opacity: 0; transform: translateY(8px); transition: all .25s; pointer-events: none; z-index: 999; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.cq-match { font-size: 10px; color: #1565c0; margin-top: 2px; font-style: italic; }
+.ni-cq { background: #e8f0fe !important; }
+.cq-badge { display:inline-block; font-size:9px; padding:1px 5px; background:#e8f0fe; color:#1565c0; border-radius:4px; margin-left:4px; vertical-align:middle; }
+.chk-print, .chk-design { display:flex; align-items:center; gap:5px; cursor:pointer; font-size:10px; color:var(--muted); }
+.chk-print input, .chk-design input { width:17px; height:17px; accent-color: var(--green); cursor:pointer; }
+.row-printed .d-name, .row-printed .d-last-mo { opacity:.45; text-decoration:line-through; }
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div style="font-size:22px">🏷️</div>
+  <div>
+    <div class="hdr-title">Générateur de Fiche Étiquette</div>
+    <div class="hdr-sub">Les Cuisiniers du Potager · Odoo temps réel</div>
+  </div>
+</div>
+
+<div class="srch" style="position:relative">
+  <div class="srch-row">
+    <button id="btn-back" class="btn btn-o" title="Retour">← Retour</button>
+    <button id="btn-home" class="btn btn-o" title="Accueil">🏠 Accueil</button>
+    <input id="si" type="text" class="srch-input" placeholder="Référence MO (ex : WH/MO/00339) ou nom de produit…" autocomplete="off">
+    <button id="btn-search" class="btn btn-g">Rechercher</button>
+    <button id="btn-recent" class="btn btn-o">Récents ▾</button>
+  </div>
+  <div id="drop" class="drop"></div>
+</div>
+
+<div id="root">
+  <div class="spin-wrap"><div class="spinner"></div> Chargement…</div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ── Odoo helper ──────────────────────────────────────────────────────────────
+async function odoo(model, method, params) {
+  if (!window.cowork?.callMcpTool) {
+    throw new Error('⚠️ Cette application doit être utilisée dans le panneau Cowork — pas ouverte directement dans Chrome. Fermez cet onglet et utilisez l\'artifact depuis Claude.');
+  }
+  const r = await window.cowork.callMcpTool('mcp__odoo19_prod__odoo_call', { model, method, params });
+  let raw;
+  if (r.structuredContent) {
+    raw = r.structuredContent;
+  } else {
+    const txt = r.content?.[0]?.text ?? '';
+    try { raw = JSON.parse(txt); }
+    catch(_) {
+      throw new Error('Accès Odoo non autorisé ou indisponible. Autorisez le connecteur « odoo19_prod » pour cet artifact (bandeau d\'autorisation ou menu ⋯), puis rechargez. Détail : ' + txt.slice(0, 200));
+    }
+  }
+  const result = typeof raw.result === 'string' ? JSON.parse(raw.result) : raw.result;
+  if (result && result.error) throw new Error(result.detail?.message || result.error);
+  return result;
+}
+
+// ── State ────────────────────────────────────────────────────────────────────
+let MO = null;
+let INGS = [];           // [{product_id:[id,name], qty_g, uom, lot, step}]
+let NUTRI_DB = {};       // localStorage: nutri_ing_{pid}_{key} → value per 100g
+let FINISHED_G = 0;      // masse produit fini (g) — base du calcul nutri si réduction connue
+let CLIENT_PRODUCT = false; // MO de conditionnement d'un produit client → pas de calcul nutri
+let SHOW_ALL_PCT = (()=>{ try { return localStorage.getItem('lcp_show_all_pct')==='1'; } catch(_){ return false; } })(); // afficher tous les % ou seulement le QUID (dénomination de vente)
+
+const NUTRIENTS = [
+  { key:'kcal',   label:'Énergie',                  unit:'kcal' },
+  { key:'kj',     label:'Énergie',                  unit:'kJ'   },
+  { key:'fat',    label:'Matières grasses',          unit:'g'    },
+  { key:'satfat', label:'dont acides gras saturés', unit:'g',  sub:true },
+  { key:'carbs',  label:'Glucides',                  unit:'g'    },
+  { key:'sugars', label:'dont sucres',              unit:'g',  sub:true },
+  { key:'fiber',  label:'Fibres alimentaires',       unit:'g'    },
+  { key:'prot',   label:'Protéines',                 unit:'g'    },
+  { key:'salt',   label:'Sel',                       unit:'g'    },
+];
+
+// ── Base Ciqual 2020 (valeurs pour 100 g) ─────────────────────────────────────
+// kw = mots-clés normalisés pour le matching
+const CIQUAL_DB = [
+  {n:"Huile d'olive vierge extra", kw:["huile","olive"], kcal:900, kj:3700, fat:99.9, satfat:15.2, carbs:0, sugars:0, fiber:0, prot:0.5, salt:0.013},
+  {n:"Huile de tournesol", kw:["huile","tournesol"], kcal:901, kj:3700, fat:100, satfat:11.1, carbs:0, sugars:0, fiber:0, prot:0.5, salt:0.025},
+  {n:"Huile de colza", kw:["huile","colza"], kcal:900, kj:3700, fat:100, satfat:7.26, carbs:0, sugars:0, fiber:0, prot:0, salt:0},
+  {n:"Huile de noix", kw:["huile","noix"], kcal:900, kj:3696, fat:99.9, satfat:9.1, carbs:0, sugars:0, fiber:0, prot:0, salt:0},
+  {n:"Basilic frais", kw:["basilic"], kcal:34.8, kj:145, fat:0.47, satfat:0.13, carbs:2.55, sugars:0.37, fiber:1.6, prot:3.35, salt:0.028},
+  {n:"Ail cru", kw:["ail"], kcal:127, kj:538, fat:0.5, satfat:0.01, carbs:23.8, sugars:1.4, fiber:4.1, prot:5.56, salt:0.013},
+  {n:"Pignons de pin", kw:["pignon","pin"], kcal:673, kj:2830, fat:65, satfat:5.53, carbs:6.31, sugars:5.21, fiber:3.7, prot:16.2, salt:0.023},
+  {n:"Parmesan (Parmigiano Reggiano)", kw:["parmesan","parmigiano","grana","padano"], kcal:411, kj:1710, fat:31, satfat:20.6, carbs:1.14, sugars:0, fiber:0, prot:30.5, salt:1.57},
+  {n:"Tomate crue", kw:["tomate"], kcal:25.3, kj:106, fat:0.4, satfat:0.11, carbs:3.53, sugars:3.1, fiber:1.2, prot:1, salt:0.013},
+  {n:"Concentré de tomates", kw:["concentre","tomate"], kcal:99.2, kj:419, fat:0.53, satfat:0.09, carbs:17.1, sugars:13.3, fiber:4, prot:4.4, salt:0.27},
+  {n:"Courgette crue", kw:["courgette"], kcal:23, kj:96.6, fat:0.3, satfat:0.01, carbs:3.13, sugars:2.7, fiber:1.1, prot:1.5, salt:0.013},
+  {n:"Aubergine crue", kw:["aubergine"], kcal:33.8, kj:143, fat:0.3, satfat:0.01, carbs:3.83, sugars:3.4, fiber:2.5, prot:1.31, salt:0.013},
+  {n:"Poivron rouge cru", kw:["poivron","rouge"], kcal:28.6, kj:120, fat:0.3, satfat:0.1, carbs:3.53, sugars:3.1, fiber:2.1, prot:1.25, salt:0.013},
+  {n:"Poivron vert cru", kw:["poivron","vert"], kcal:28.6, kj:120, fat:0.3, satfat:0.1, carbs:3.53, sugars:3.1, fiber:2, prot:1.25, salt:0.013},
+  {n:"Oignon cru", kw:["oignon"], kcal:40.2, kj:169, fat:0.3, satfat:0.01, carbs:6.73, sugars:5, fiber:2.1, prot:1.56, salt:0.013},
+  {n:"Echalote crue", kw:["echalote"], kcal:72, kj:301, fat:0.1, satfat:0.02, carbs:13.4, sugars:5.8, fiber:3.2, prot:2.5, salt:0.02},
+  {n:"Carotte crue", kw:["carotte"], kcal:35, kj:147, fat:0.17, satfat:0.03, carbs:6.1, sugars:5, fiber:2.8, prot:0.76, salt:0.09},
+  {n:"Pomme de terre", kw:["pomme","terre"], kcal:80.5, kj:341, fat:0.34, satfat:0.094, carbs:16.7, sugars:0.86, fiber:1.8, prot:1.8, salt:0.052},
+  {n:"Poireau cru", kw:["poireau"], kcal:14.7, kj:61.1, fat:0.2, satfat:0.027, carbs:3, sugars:2.11, fiber:2.1, prot:1.1, salt:0.015},
+  {n:"Epinard cru", kw:["epinard"], kcal:23, kj:96, fat:0.39, satfat:0.06, carbs:1.43, sugars:0.42, fiber:2.2, prot:2.86, salt:0.2},
+  {n:"Roquette crue", kw:["roquette"], kcal:25, kj:105, fat:0.66, satfat:0.09, carbs:2.05, sugars:2.05, fiber:1.6, prot:2.58, salt:0.11},
+  {n:"Brocoli cru", kw:["brocoli"], kcal:23.1, kj:96.1, fat:0.5, satfat:0.14, carbs:1.03, sugars:0.6, fiber:2.6, prot:2.19, salt:0.033},
+  {n:"Chou-fleur cru", kw:["chou","fleur"], kcal:20.9, kj:87.3, fat:0.46, satfat:0.09, carbs:1.6, sugars:1.59, fiber:2.5, prot:1.6, salt:0.01},
+  {n:"Céleri-rave cru", kw:["celeri","rave"], kcal:16.7, kj:70, fat:0.3, satfat:0.01, carbs:2.48, sugars:1.7, fiber:3.7, prot:0.75, salt:0.35},
+  {n:"Fenouil cru", kw:["fenouil"], kcal:13.7, kj:57.1, fat:0.3, satfat:0.01, carbs:1.94, sugars:1.3, fiber:3.1, prot:0.5, salt:0.028},
+  {n:"Champignon de Paris cru", kw:["champignon"], kcal:22, kj:93, fat:0.34, satfat:0.04, carbs:0.56, sugars:0.25, fiber:2.5, prot:3.09, salt:0.01},
+  {n:"Haricots verts crus", kw:["haricot","vert"], kcal:25, kj:106, fat:0.16, satfat:0.04, carbs:3.37, sugars:1.54, fiber:2.8, prot:1.83, salt:0.01},
+  {n:"Petits pois", kw:["pois","petit"], kcal:81.5, kj:342, fat:0.8, satfat:0.15, carbs:10.7, sugars:3.59, fiber:5.1, prot:5.12, salt:0.64},
+  {n:"Pois chiches cuits", kw:["pois","chiche"], kcal:147, kj:618, fat:3, satfat:0.46, carbs:17.7, sugars:0.3, fiber:7.6, prot:8.31, salt:0.027},
+  {n:"Lentilles cuites", kw:["lentille"], kcal:117, kj:490, fat:0.38, satfat:0.05, carbs:16.9, sugars:1.8, fiber:4.9, prot:9, salt:0.01},
+  {n:"Haricots blancs cuits", kw:["haricot","blanc"], kcal:116, kj:487, fat:0.6, satfat:0.19, carbs:12.3, sugars:0.5, fiber:10.5, prot:9.63, salt:0.021},
+  {n:"Persil frais", kw:["persil"], kcal:43, kj:180, fat:0.63, satfat:0.13, carbs:3.48, sugars:0.9, fiber:4.3, prot:3.71, salt:0.07},
+  {n:"Coriandre fraîche", kw:["coriandre"], kcal:22.3, kj:92.6, fat:0.52, satfat:0.014, carbs:0.87, sugars:0.87, fiber:2.8, prot:2.13, salt:0.12},
+  {n:"Menthe fraîche", kw:["menthe"], kcal:57.6, kj:240, fat:0.84, satfat:0.22, carbs:5.3, sugars:5.3, fiber:6.8, prot:3.52, salt:0.076},
+  {n:"Thym frais", kw:["thym"], kcal:101, kj:424, fat:1.68, satfat:0.43, carbs:6.3, sugars:0.77, fiber:14, prot:5.56, salt:0.07},
+  {n:"Romarin frais", kw:["romarin"], kcal:131, kj:548, fat:5.86, satfat:2.84, carbs:6.6, sugars:0, fiber:14.1, prot:3.31, salt:0.05},
+  {n:"Estragon frais", kw:["estragon"], kcal:49, kj:205, fat:1.15, satfat:0.28, carbs:1.8, sugars:1.8, fiber:2.4, prot:5.54, salt:0.08},
+  {n:"Gingembre frais", kw:["gingembre"], kcal:32.9, kj:137, fat:1.1, satfat:0.09, carbs:3.4, sugars:1, fiber:2, prot:1.1, salt:0.016},
+  {n:"Curcuma en poudre", kw:["curcuma"], kcal:291, kj:1220, fat:3.25, satfat:1.84, carbs:44.4, sugars:3.21, fiber:22.7, prot:9.68, salt:0.068},
+  {n:"Noix", kw:["noix"], kcal:654, kj:2732, fat:65.2, satfat:6.1, carbs:7, sugars:2.6, fiber:4.6, prot:14.4, salt:0.003},
+  {n:"Amandes", kw:["amande"], kcal:576, kj:2422, fat:51.3, satfat:4.11, carbs:9.51, sugars:4.2, fiber:12.5, prot:22.6, salt:0.013},
+  {n:"Noix de cajou", kw:["cajou","cashew"], kcal:580, kj:2435, fat:47, satfat:9.3, carbs:22.5, sugars:5.8, fiber:3, prot:18, salt:0.01},
+  {n:"Noisettes", kw:["noisette"], kcal:570, kj:2400, fat:66, satfat:4.5, carbs:5.2, sugars:4.26, fiber:9.7, prot:17, salt:0},
+  {n:"Noix de coco râpée", kw:["coco","noix","rapee"], kcal:660, kj:2759, fat:64.5, satfat:57.2, carbs:7, sugars:6.4, fiber:13.7, prot:6, salt:0.04},
+  {n:"Lait de coco", kw:["lait","coco"], kcal:194, kj:806, fat:20.2, satfat:17.4, carbs:2.8, sugars:1.5, fiber:0.2, prot:1.94, salt:0.02},
+  {n:"Tahini (purée de sésame)", kw:["tahini","sesame","tahine"], kcal:595, kj:2487, fat:53.8, satfat:7.5, carbs:9.6, sugars:0.48, fiber:9.3, prot:17.8, salt:0.05},
+  {n:"Purée d'amandes", kw:["puree","amande"], kcal:598, kj:2504, fat:52.5, satfat:3.95, carbs:7.2, sugars:5.3, fiber:12.5, prot:21.8, salt:0.01},
+  {n:"Sel", kw:["sel"], kcal:0, kj:0, fat:0, satfat:0, carbs:0, sugars:0, fiber:0, prot:0, salt:80.5},
+  {n:"Sucre blanc", kw:["sucre"], kcal:398, kj:1690, fat:0, satfat:0, carbs:99.8, sugars:99.8, fiber:0, prot:0, salt:0.0054},
+  {n:"Miel", kw:["miel"], kcal:327, kj:1390, fat:0, satfat:0, carbs:82, sugars:82, fiber:0.2, prot:0.03, salt:0.04},
+  {n:"Vinaigre balsamique", kw:["vinaigre","balsamique"], kcal:125, kj:521, fat:0.6, satfat:0, carbs:25.8, sugars:19.1, fiber:0, prot:0.69, salt:0.068},
+  {n:"Vinaigre de vin", kw:["vinaigre","vin"], kcal:21.6, kj:93.3, fat:0, satfat:0, carbs:0, sugars:0, fiber:0, prot:0.5, salt:0.013},
+  {n:"Câpres", kw:["capre"], kcal:29, kj:123, fat:0.86, satfat:0.23, carbs:3.5, sugars:0.41, fiber:3.2, prot:2.18, salt:4.06},
+  {n:"Olives noires", kw:["olive","noire"], kcal:145, kj:603, fat:15.3, satfat:2.09, carbs:0.54, sugars:0.54, fiber:3.3, prot:1.03, salt:3.3},
+  {n:"Olives vertes", kw:["olive","verte"], kcal:155, kj:637, fat:15.7, satfat:2.33, carbs:0, sugars:0, fiber:3.8, prot:1.31, salt:3.15},
+  {n:"Citron jus", kw:["citron","jus"], kcal:25, kj:105, fat:0.29, satfat:0.038, carbs:6.1, sugars:2.4, fiber:0.3, prot:0.4, salt:0.053},
+  {n:"Fromage de chèvre frais", kw:["chevre","fromage"], kcal:300, kj:1253, fat:23.5, satfat:16.1, carbs:1, sugars:1, fiber:0, prot:20.6, salt:1.1},
+  {n:"Mozzarella", kw:["mozzarella"], kcal:243, kj:1013, fat:17, satfat:11, carbs:2.1, sugars:0.5, fiber:0, prot:20.9, salt:0.66},
+  {n:"Ricotta", kw:["ricotta"], kcal:155, kj:645, fat:11.5, satfat:7.1, carbs:2.7, sugars:2.7, fiber:0, prot:9.5, salt:0.3},
+  {n:"Crème fraîche entière", kw:["creme","fraiche"], kcal:292, kj:1199, fat:30, satfat:19.8, carbs:2.4, sugars:2.4, fiber:0, prot:2, salt:0.05},
+  {n:"Beurre doux", kw:["beurre"], kcal:753, kj:3100, fat:82.9, satfat:55.4, carbs:0.9, sugars:0.83, fiber:0, prot:0.69, salt:0.06},
+  {n:"Oeuf entier", kw:["oeuf"], kcal:155, kj:647, fat:11.4, satfat:3.1, carbs:0.5, sugars:0.5, fiber:0, prot:12.5, salt:0.35},
+  {n:"Farine de blé T55", kw:["farine","ble"], kcal:362, kj:1515, fat:1.2, satfat:0.18, carbs:72.2, sugars:1, fiber:2.8, prot:10.3, salt:0.02},
+  {n:"Artichaut cuit", kw:["artichaut"], kcal:26, kj:109, fat:0.5, satfat:0.01, carbs:2.31, sugars:1.2, fiber:5.4, prot:1.8, salt:0.78},
+  {n:"Asperge cuite", kw:["asperge"], kcal:26.6, kj:112, fat:0.3, satfat:0.07, carbs:1.73, sugars:1.3, fiber:2.1, prot:2.69, salt:0.013},
+  {n:"Eau", kw:["eau"], kcal:0, kj:0, fat:0, satfat:0, carbs:0, sugars:0, fiber:0, prot:0, salt:0},
+];
+
+// ── Matching Ciqual ───────────────────────────────────────────────────────────
+function normStr(s) {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+}
+// ── QUID : un ingrédient se réfère-t-il à la dénomination de vente du produit ? ──
+const PCT_STOP = new Set(['prepare','preparee','prepares','preparees','cru','crue','crus','crues','cuit','cuite','cuits','cuites','bio','frais','fraiche','fraiches','sauce','tartinade','caviar','de','du','des','la','le','les','au','aux','en','et','a','poudre','pele','pelee','peles','pelees','hache','hachee','mixe','mixee','sec','seche','sechee','sechees','seau','pot','bocal','ml','cl','kg','g']);
+function normWords(s){ return normStr(s).split(/\s+/).filter(w => w.length > 1 && !/\d/.test(w)); }
+function refersToSalesName(ingName, prodName){
+  const pw = new Set(normWords(prodName).filter(w => !PCT_STOP.has(w)));
+  if (!pw.size) return false;
+  return normWords(ingName).some(w => !PCT_STOP.has(w) && pw.has(w));
+}
+// Texte du % / QUID à afficher à côté d'un ingrédient dans la liste étiquette.
+// Affiché si : ingrédient cité dans le nom (QUID obligatoire) OU case « Afficher les % » cochée.
+// Base = produit fini (après réduction) pour rester cohérent entre tous les ingrédients.
+//   Si > 100 g/100 g → phrase « élaboré avec X g pour 100 g » (remplace le %).
+function quidText(qtyG, refers, totalG){
+  if (!(refers || SHOW_ALL_PCT)) return '';
+  const base = FINISHED_G > 0 ? FINISHED_G : totalG;
+  if (base <= 0) return '';
+  const q = qtyG / base * 100;
+  if (q > 100) return ' (élaboré avec ' + Math.round(q) + ' g pour 100 g de produit fini)';
+  return ' (' + q.toFixed(1) + '%)';
+}
+// Nom d'ingrédient « propre » pour l'étiquette : retire l'adjectif de préparation final
+// (préparé/préparée/…, pelé/…) — ex : « Tomate préparée » → « Tomate ». Affichage seulement.
+function cleanIngName(name){
+  return String(name).replace(/\s+(pr[ée]par[ée]e?s?|pel[ée]e?s?)\s*$/iu, '').trim();
+}
+function findCiqual(name) {
+  const words = normStr(name).split(/\s+/).filter(w => w.length > 1);
+  if (!words.length) return null;
+  // Produits séchés/composés (ex : tomates séchées) : pas d'estimation Ciqual,
+  // les valeurs doivent venir de la fiche produit Odoo.
+  if (words.some(w => w.startsWith('sech'))) return null;
+  let best = null, bestScore = 0;
+  for (const entry of CIQUAL_DB) {
+    const score = entry.kw.reduce((s, kw) =>
+      s + (words.some(w => w === kw || w.startsWith(kw) || kw.startsWith(w)) ? 1 : 0), 0);
+    if (score > bestScore) { bestScore = score; best = entry; }
+  }
+  return bestScore > 0 ? best : null;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function toG(qty, uom) {
+  const u = (uom||'').toLowerCase();
+  if (u.includes('kg')) return qty * 1000;
+  if (u === 'l' || u.startsWith('litr') || u.startsWith('liter')) return qty * 1000;
+  if (u.includes('cl')) return qty * 10;
+  if (u.includes('ml')) return qty;
+  return qty; // g or unknown
+}
+function fmtG(g) {
+  if (g >= 1000) return (g/1000).toFixed(2).replace(/\.?0+$/,'') + ' kg';
+  return g % 1 === 0 ? g + ' g' : g.toFixed(1) + ' g';
+}
+function stCls(s) { return {done:'b-done',progress:'b-prog',confirmed:'b-conf'}[s]||'b-conf'; }
+function stLbl(s) { return {done:'Terminé',progress:'En cours',confirmed:'Confirmé',draft:'Brouillon'}[s]||s; }
+
+// ── Allergènes (règlement INCO 1169/2011) : mise en gras dans la liste d'ingrédients ──
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+const ALLERGEN_SRC = 'gluten|bl[ée]s?|froment|seigles?|orges?|avoines?|[ée]peautre|kamut|malt|œufs?|oeufs?|poissons?|anchois|crustac[ée]s?|crevettes?|gambas|langoustines?|crabes?|homards?|mollusques?|moules?|hu[îi]tres?|calmars?|seiches?|poulpes?|escargots?|laits?|lactose|lactos[ée]rum|beurre|cr[èe]me|fromage|parmesan|mozzarella|ricotta|mascarpone|ch[èe]vre|soja|soya|arachides?|cacahu[èe]tes?|s[ée]same|tahin[ée]?|tahini|moutarde|c[ée]leri|sulfites?|m[ée]tabisulfites?|disulfites?|anhydride sulfureux|lupin|amandes?|noisettes?|pistaches?|cajou|p[ée]cans?|macadamia';
+const ALLERGEN_RE = new RegExp('(?<![\\p{L}])('+ALLERGEN_SRC+')(?![\\p{L}])','giu');
+const ALLERGEN_RUN_RE = new RegExp('(?<![\\p{L}])(?:'+ALLERGEN_SRC+'|noix(?!\\s+de\\s+(?:coco|muscade)))(?![\\p{L}])','giu');
+function boldAllergens(txt){
+  let s = escHtml(txt);
+  s = s.replace(ALLERGEN_RE, '<strong>$1</strong>');
+  // Noix (sauf « noix de coco » / « noix de muscade », non allergènes)
+  s = s.replace(/(?<![\p{L}])noix(?!\s+de\s+(?:coco|muscade))(?![\p{L}])/giu, '<strong>$&</strong>');
+  return s;
+}
+// Découpe un texte en segments {t, b} (b=true = allergène), pour transférer le gras vers Illustrator
+function allergenRuns(txt){
+  const runs=[]; let last=0, m; ALLERGEN_RUN_RE.lastIndex=0;
+  while((m=ALLERGEN_RUN_RE.exec(txt))){
+    if(m.index>last) runs.push({t:txt.slice(last,m.index),b:false});
+    runs.push({t:m[0],b:true});
+    last=m.index+m[0].length;
+    if(m[0].length===0) ALLERGEN_RUN_RE.lastIndex++;
+  }
+  if(last<txt.length) runs.push({t:txt.slice(last),b:false});
+  return runs;
+}
+function nutriKey(pid, nkey) { return `nutri_ing_${pid}_${nkey}`; }
+function loadNutri(pid, ingName) {
+  // 0. Odoo en priorité (partagé entre tous les postes)
+  if (NUTRI_DB[pid]) {
+    const d0 = {};
+    NUTRIENTS.forEach(n => { d0[n.key] = NUTRI_DB[pid][n.key] ?? ''; });
+    return { vals: d0, src: 'odoo', ref: null };
+  }
+
+  // 1. localStorage
+  let hasLS = false;
+  const d = {};
+  NUTRIENTS.forEach(n => {
+    const v = localStorage.getItem(nutriKey(pid, n.key));
+    if (v !== null) { d[n.key] = parseFloat(v) || ''; hasLS = true; }
+    else d[n.key] = '';
+  });
+  if (hasLS) return { vals: d, src: 'ls', ref: null };
+
+  // 2. Fallback Ciqual
+  const cq = ingName ? findCiqual(ingName) : null;
+  if (cq) {
+    NUTRIENTS.forEach(n => { d[n.key] = cq[n.key] !== undefined ? cq[n.key] : ''; });
+    return { vals: d, src: 'cq', ref: cq.n };
+  }
+
+  return { vals: d, src: 'none', ref: null };
+}
+function saveNutriPid(pid, data) {
+  NUTRIENTS.forEach(n => {
+    if (data[n.key] !== '' && data[n.key] !== undefined)
+      localStorage.setItem(nutriKey(pid, n.key), data[n.key]);
+    else
+      localStorage.removeItem(nutriKey(pid, n.key));
+  });
+}
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+// ── Search ───────────────────────────────────────────────────────────────────
+const si = document.getElementById('si');
+const drop = document.getElementById('drop');
+let stimer;
+
+si.addEventListener('input', () => { clearTimeout(stimer); stimer = setTimeout(() => si.value.trim().length >= 2 && doSearch(), 420); });
+si.addEventListener('keydown', e => { if(e.key==='Enter') doSearch(); if(e.key==='Escape') closeDrop(); });
+
+// Délégation globale — couvre boutons statiques ET contenu dynamique
+document.addEventListener('click', e => {
+  // Fermer dropdown si clic hors zone
+  if (!e.target.closest('.srch')) closeDrop();
+
+  const id = e.target.id || e.target.closest('button')?.id;
+  if (id === 'btn-search') { doSearch(); return; }
+  if (id === 'btn-recent') { loadRecent(); return; }
+  if (id === 'btn-home')   { goHome(); return; }
+  if (id === 'btn-back')   { goBack(); return; }
+
+  // Case « étiquette imprimée » — écrit dans Odoo (partagé), ne pas ouvrir le MO
+  const chk = e.target.closest('.chk-print');
+  if (chk) {
+    const input = chk.querySelector('input[data-printed-mo]');
+    if (input) {
+      const row = chk.closest('.drop-row');
+      const checked = input.checked;
+      row?.classList.toggle('row-printed', checked); // optimiste
+      odoo('mrp.production','write',{ids:[parseInt(input.dataset.printedMo)], vals:{x_studio_etiquette_imprimee: checked}})
+        .then(() => toast(checked ? '✅ Étiquette marquée imprimée' : 'Marquage retiré'))
+        .catch(err => {
+          input.checked = !checked;
+          row?.classList.toggle('row-printed', !checked);
+          toast('⚠️ Odoo : ' + err.message);
+        });
+    }
+    return;
+  }
+
+  // Case « design fait » — écrit dans Odoo (partagé), ne pas ouvrir le MO
+  const chkD = e.target.closest('.chk-design');
+  if (chkD) {
+    const input = chkD.querySelector('input[data-design-mo]');
+    if (input) {
+      const checked = input.checked;
+      odoo('mrp.production','write',{ids:[parseInt(input.dataset.designMo)], vals:{x_studio_design_fait: checked}})
+        .then(() => toast(checked ? '🎨 Design marqué fait' : 'Marquage retiré'))
+        .catch(err => {
+          input.checked = !checked;
+          toast('⚠️ Odoo : ' + err.message);
+        });
+    }
+    return;
+  }
+
+  // Dropdown MO rows
+  const moRow = e.target.closest('[data-mo-id]');
+  if (moRow) { selectMO(parseInt(moRow.dataset.moId)); return; }
+
+  // Boutons dans #root
+  const actionEl = e.target.closest('[data-action]');
+  if (actionEl) {
+    const a = actionEl.dataset.action;
+    if      (a === 'switchTab')       switchTab(actionEl.dataset.tab);
+    else if (a === 'copyIngredients') copyIngredients();
+    else if (a === 'saveAllNutri')    saveAllNutri();
+    else if (a === 'clearNutri')      clearNutri();
+    else if (a === 'copyAll')         copyAll();
+    else if (a === 'copyIllustrator') copyForIllustrator();
+    else if (a === 'printFiche')      printFiche();
+    else if (a === 'refreshHome')     initHomePage();
+    else if (a === 'showDetails')     showDetails();
+  }
+});
+function closeDrop() { drop.classList.remove('open'); drop.innerHTML=''; }
+
+// ── Navigation Accueil / Retour ──────────────────────────────────────────────
+function goHome() {
+  MO = null; INGS = [];
+  si.value = '';
+  closeDrop();
+  document.getElementById('root').innerHTML = '<div class="spin-wrap"><div class="spinner"></div> Chargement…</div>';
+  initHomePage();
+}
+function goBack() {
+  const bar = document.getElementById('tabsBar');
+  if (MO && bar && bar.style.display !== 'none') {
+    // Détails fabrication → retour à l'aperçu étiquette
+    bar.style.display = 'none';
+    switchTab('label');
+  } else if (MO) {
+    // Aperçu étiquette → retour à l'accueil
+    goHome();
+  }
+}
+
+async function doSearch() {
+  const q = si.value.trim();
+  drop.innerHTML = '<div class="drop-row"><div class="spinner"></div></div>';
+  drop.classList.add('open');
+  try {
+    // Run both searches in parallel: by MO ref AND by product name
+    const [byRef, byProduct] = await Promise.all([
+      q ? odoo('mrp.production','search_read',{
+        domain:[['name','ilike',q]],
+        fields:['name','product_id','product_qty','qty_produced','state','product_uom_id'],
+        limit:8, order:'id desc'
+      }) : Promise.resolve([]),
+      q ? odoo('mrp.production','search_read',{
+        domain:[['product_id.display_name','ilike',q],['state','in',['done','progress','confirmed']]],
+        fields:['name','product_id','product_qty','qty_produced','state','product_uom_id'],
+        limit:30, order:'id desc'
+      }) : Promise.resolve([])
+    ]);
+
+    // Group byProduct results by product → keep only the latest MO per product
+    const latestByProduct = {};
+    for (const mo of byProduct) {
+      const pid = mo.product_id[0];
+      if (!latestByProduct[pid]) latestByProduct[pid] = mo; // already sorted by id desc
+    }
+    // Remove products already shown in byRef
+    const refIds = new Set(byRef.map(m => m.id));
+    const productRows = Object.values(latestByProduct).filter(m => !refIds.has(m.id));
+
+    renderDrop(byRef, productRows);
+  } catch(e) { drop.innerHTML=`<div class="drop-row" style="color:var(--red)">${e.message}</div>`; }
+}
+
+async function loadRecent() {
+  si.value = '';
+  drop.innerHTML = '<div class="drop-row"><div class="spinner"></div></div>';
+  drop.classList.add('open');
+  try {
+    const mos = await odoo('mrp.production','search_read',{
+      domain:[['state','in',['done','progress','confirmed']]],
+      fields:['name','product_id','product_qty','qty_produced','state','product_uom_id'],
+      limit:50, order:'id desc'
+    });
+    // Group by product, keep latest MO per product
+    const latestByProduct = {};
+    for (const mo of mos) {
+      const pid = mo.product_id[0];
+      if (!latestByProduct[pid]) latestByProduct[pid] = mo;
+    }
+    renderDrop([], Object.values(latestByProduct).sort((a,b) => b.id - a.id));
+  } catch(e) { drop.innerHTML=`<div class="drop-row" style="color:var(--red)">${e.message}</div>`; }
+}
+
+function renderDrop(moRows, productRows) {
+  if (!moRows.length && !productRows.length) {
+    drop.innerHTML='<div class="drop-row" style="color:var(--muted)">Aucun résultat</div>';
+    return;
+  }
+  let html = '';
+
+  if (moRows.length) {
+    html += `<div class="drop-section">Par référence MO</div>`;
+    html += moRows.map(mo => {
+      const qty = (mo.state==='done' && mo.qty_produced>0) ? mo.qty_produced : (mo.qty_producing>0 ? mo.qty_producing : mo.product_qty);
+      const unit = mo.product_uom_id?.[1] || '';
+      return `<div class="drop-row" data-mo-id="${mo.id}">
+        <div><div class="d-ref">${mo.name}</div><div class="d-name">${mo.product_id[1]}</div></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:12px;color:var(--muted)">${qty} ${unit}</span>
+          <span class="badge ${stCls(mo.state)}">${stLbl(mo.state)}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  if (productRows.length) {
+    html += `<div class="drop-section">Par produit (dernier MO)</div>`;
+    html += productRows.map(mo => {
+      const qty = (mo.state==='done' && mo.qty_produced>0) ? mo.qty_produced : (mo.qty_producing>0 ? mo.qty_producing : mo.product_qty);
+      const unit = mo.product_uom_id?.[1] || '';
+      return `<div class="drop-row product-row" data-mo-id="${mo.id}">
+        <div>
+          <div class="d-name" style="font-weight:600">${mo.product_id[1]}</div>
+          <div class="d-last-mo">Dernier MO : ${mo.name} · ${qty} ${unit} · <span style="color:var(--green)">${stLbl(mo.state)}</span></div>
+        </div>
+        <span style="font-size:18px">↗</span>
+      </div>`;
+    }).join('');
+  }
+
+  drop.innerHTML = html;
+}
+
+// ── Load MO ──────────────────────────────────────────────────────────────────
+let activeTab = 'prod';
+async function selectMO(id) {
+  closeDrop();
+  const root = document.getElementById('root');
+  root.innerHTML = '<div class="spin-wrap"><div class="spinner"></div> Chargement Odoo…</div>';
+
+  try {
+    // 1. MO
+    const [mo] = await odoo('mrp.production','read',{
+      ids:[id],
+      fields:['name','product_id','product_tmpl_id','product_qty','qty_produced','qty_producing','state',
+              'date_start','move_raw_ids','move_finished_ids','check_ids','product_uom_id','workorder_ids',
+              'x_studio_partner_id','x_studio_taux_reduction']
+    });
+    MO = mo;
+    si.value = mo.name;
+
+    // Poids théorique de la fiche produit (fallback si pas de contrôle qualité poids)
+    // + catégorie : produit de conditionnement client → pas de nutri calculée
+    mo.product_weight = null;
+    CLIENT_PRODUCT = false;
+    try {
+      const [p] = await odoo('product.product','read',{ids:[mo.product_id[0]], fields:['weight','categ_id']});
+      mo.product_weight = p?.weight || null; // en kg
+      const categName = p?.categ_id?.[1] || '';
+      CLIENT_PRODUCT = /produits?\s*clients/i.test(categName);
+    } catch(e) {}
+
+    // 2. Workorders + QC en parallèle
+    const [wos, checks] = await Promise.all([
+      mo.workorder_ids?.length
+        ? odoo('mrp.workorder','search_read',{
+            domain:[['id','in',mo.workorder_ids]],
+            fields:['name','state','qty_produced','x_studio_lot_produit','x_studio_wo_consumption_line_ids'],
+            limit:20
+          })
+        : Promise.resolve([]),
+      odoo('quality.check','search_read',{
+        domain:[['production_id','=',id]],
+        fields:['title','measure','norm_unit','result','quality_state','test_type'],
+        limit:30
+      })
+    ]);
+
+    // 2b. Chercher le lot du produit fini (plusieurs méthodes en cascade)
+    mo.lot_name = null;
+
+    // Méthode 0 : x_studio_lot_produit sur les workorders (saisi sur tablette lors de la clôture)
+    for (const wo of wos) {
+      if (wo.x_studio_lot_produit) { mo.lot_name = wo.x_studio_lot_produit[1]; break; }
+    }
+
+    if (!mo.lot_name && mo.move_finished_ids?.length) {
+      try {
+        // Méthode 1 : stock.move → lot_ids (fonctionne même si le move n'est pas "done")
+        const fMoves = await odoo('stock.move','search_read',{
+          domain:[['id','in',mo.move_finished_ids],['product_id','=',mo.product_id[0]]],
+          fields:['lot_ids'],
+          limit:5
+        });
+        const lotIds = fMoves.flatMap(m => m.lot_ids||[]);
+        if (lotIds.length) {
+          const lots = await odoo('stock.lot','read',{ids:[lotIds[0]], fields:['name']});
+          mo.lot_name = lots?.[0]?.name || null;
+        }
+      } catch(e) {}
+
+      if (!mo.lot_name) {
+        try {
+          // Méthode 2 : stock.move.line (fonctionne si move est "done")
+          const fLines = await odoo('stock.move.line','search_read',{
+            domain:[['move_id','in',mo.move_finished_ids],['lot_id','!=',false]],
+            fields:['lot_id'],
+            limit:5
+          });
+          mo.lot_name = fLines?.[0]?.lot_id?.[1] || null;
+        } catch(e) {}
+      }
+    } // fin if move_finished_ids
+
+    // Méthode 3 : chercher stock.lot par produit + référence MO
+    if (!mo.lot_name) {
+      try {
+        const moSeq = mo.name.split('/').pop(); // ex: "00346"
+        const lots = await odoo('stock.lot','search_read',{
+          domain:[['product_id','=',mo.product_id[0]],['name','ilike',moSeq]],
+          fields:['name'],
+          limit:3,
+          order:'id desc'
+        });
+        mo.lot_name = lots?.[0]?.name || null;
+      } catch(e) {}
+    }
+
+    // 3. Collect actual consumption lines — uniquement depuis les postes "cuisson" ou "assemblage"
+    const cuissonWos = wos.filter(wo => {
+      const n = wo.name?.toLowerCase() || '';
+      return n.includes('cuisson') || n.includes('assemblage');
+    });
+    const allLineIds = cuissonWos.flatMap(wo => wo.x_studio_wo_consumption_line_ids || []);
+    let lines = [];
+    let stepName = cuissonWos[0]?.name || '';
+
+    if (allLineIds.length) {
+      lines = await odoo('x_wo_consumption_line','search_read',{
+        domain:[['id','in',allLineIds]],
+        fields:['x_studio_workorder_id','x_studio_product_id','x_studio_lot_id','x_studio_qty','x_studio_uom_id'],
+        limit:200
+      });
+    }
+
+    // 4. Aggregate by product (sum quantities in grams)
+    const byPid = {};
+    for (const l of lines) {
+      if (!l.x_studio_product_id) continue;
+      const pid = l.x_studio_product_id[0];
+      const g = toG(l.x_studio_qty, l.x_studio_uom_id?.[1]);
+      if (!byPid[pid]) byPid[pid] = {
+        product_id: l.x_studio_product_id,
+        qty_g: 0,
+        uom: l.x_studio_uom_id?.[1] || 'g',
+        lot: l.x_studio_lot_id?.[1] || '',
+        step: l.x_studio_workorder_id?.[1] || ''
+      };
+      byPid[pid].qty_g += g;
+    }
+
+    // Fallback to stock.move planned if no consumption lines
+    if (!Object.keys(byPid).length && mo.move_raw_ids?.length) {
+      const moves = await odoo('stock.move','search_read',{
+        domain:[['id','in',mo.move_raw_ids]],
+        fields:['product_id','product_uom_qty','product_uom'],
+        limit:60
+      });
+      for (const m of moves) {
+        if (!m.product_id || !m.product_uom_qty) continue;
+        const pid = m.product_id[0];
+        const g = toG(m.product_uom_qty, m.product_uom?.[1]);
+        byPid[pid] = { product_id: m.product_id, qty_g: g, uom: m.product_uom?.[1]||'g', lot:'', step:'BOM (planifié)' };
+      }
+    }
+
+    INGS = Object.values(byPid).filter(i => i.qty_g > 0).sort((a,b) => b.qty_g - a.qty_g);
+
+    // Valeurs nutritionnelles partagées (champ x_studio_nutri_json sur les produits)
+    NUTRI_DB = {};
+    try {
+      const pids = INGS.map(i => i.product_id[0]);
+      if (pids.length) {
+        // 1. variant → template
+        const prods = await odoo('product.product','read',{ids:pids, fields:['product_tmpl_id']});
+        const tmplByPid = {};
+        for (const p of prods) tmplByPid[p.id] = p.product_tmpl_id ? p.product_tmpl_id[0] : null;
+        INGS.forEach(i => { i.tmpl_id = tmplByPid[i.product_id[0]] || null; });
+
+        // 2. sous-ingrédients + valeurs nutri (champs du modèle produit, partagés)
+        const tmplIds = [...new Set(INGS.map(i => i.tmpl_id).filter(Boolean))];
+        if (tmplIds.length) {
+          const nfields = NUTRIENTS.map(n => 'x_studio_nutri_' + n.key);
+          const tmpls = await odoo('product.template','read',{ids:tmplIds, fields:['x_studio_sous_ingredients', ...nfields]});
+          const subByTmpl = {}, nutriByTmpl = {};
+          for (const t of tmpls) {
+            subByTmpl[t.id] = t.x_studio_sous_ingredients || '';
+            // Champs float : 0 par défaut. On considère la nutri "renseignée"
+            // seulement si au moins une valeur est non nulle (sinon fallback Ciqual).
+            const hasNutri = NUTRIENTS.some(n => t['x_studio_nutri_' + n.key]);
+            if (hasNutri) {
+              const vals = {};
+              NUTRIENTS.forEach(n => { vals[n.key] = t['x_studio_nutri_' + n.key] || 0; });
+              nutriByTmpl[t.id] = vals;
+            }
+          }
+          INGS.forEach(i => {
+            i.sous_ing = subByTmpl[i.tmpl_id] || '';
+            if (nutriByTmpl[i.tmpl_id]) NUTRI_DB[i.product_id[0]] = nutriByTmpl[i.tmpl_id];
+          });
+        }
+      }
+    } catch(e) {}
+
+    activeTab = 'label'; // arrivée directe sur l'aperçu étiquette
+    render(mo, checks, stepName || (lines.length ? 'Cuisson' : 'BOM planifié'));
+  } catch(e) {
+    document.getElementById('root').innerHTML=`<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Erreur</div><div class="empty-sub">${e.message}</div></div>`;
+  }
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function render(mo, checks, stepName) {
+  const dateStr = mo.date_start ? new Date(mo.date_start).toLocaleDateString('fr-FR') : '—';
+  const isUnits = mo.product_uom_id?.[1] === 'Unité(s)';
+  // Odoo affiche "qty_producing / product_qty" dans le champ Quantité.
+  // qty_producing = bocaux en cours (ex: 750), product_qty = lots commandés (ex: 1).
+  // Priorité : qty_produced (si terminé) > qty_producing (si en cours) > product_qty
+  const qty = mo.state === 'done' && mo.qty_produced > 0
+    ? mo.qty_produced
+    : (mo.qty_producing > 0 ? mo.qty_producing : mo.product_qty);
+  const qtyUnit = mo.product_uom_id?.[1] || '';
+
+  // Poids : contrôle qualité (même non validé) → sinon poids théorique fiche produit
+  const poidsCheck = checks.find(c => c.title?.toLowerCase().includes('poids') && c.measure>0);
+  const poids = poidsCheck
+    ? `${poidsCheck.measure} ${poidsCheck.norm_unit}`
+    : (mo.product_weight ? fmtG(mo.product_weight * 1000) : '—');
+  mo.poids_net_str = poids;  // pour l'export Illustrator
+
+  const measureQC = checks.filter(c => c.test_type==='measure');
+  const otherQC   = checks.filter(c => c.test_type!=='measure');
+
+  const totalG = INGS.reduce((s,i) => s+i.qty_g, 0);
+
+  // ── Réduction cuisson ────────────────────────────────────────────────────────
+  // Masse entrante = ingrédients consommés (totalG). Masse produit fini = bocaux × poids net.
+  const netPerUnitG = poidsCheck ? toG(poidsCheck.measure, poidsCheck.norm_unit)
+                    : (mo.product_weight ? mo.product_weight * 1000 : 0);
+  const finishedG = isUnits ? (netPerUnitG ? qty * netPerUnitG : 0) : qty * 1000;
+  const hasReduc  = totalG > 0 && finishedG > 0;
+  const reducPct  = hasReduc ? (1 - finishedG / totalG) * 100 : null;   // réduction réelle mesurée
+  const showFini  = hasReduc && reducPct > 0.5; // colonne « pour 100 g fini » seulement si réduction réelle
+  // Marge de sécurité : on retient une réduction 20% plus faible que la mesurée
+  // (pertes dans le circuit d'empotage → concentration réelle un peu moindre).
+  const EMPOTAGE_MARGIN = 0.20;
+  const reducUsedPct = showFini ? reducPct * (1 - EMPOTAGE_MARGIN) : null;  // réduction retenue
+  const finiBaseG    = showFini ? totalG * (1 - reducUsedPct / 100) : 0;    // masse effective retenue
+  // Base du calcul nutri : masse effective (avec marge) si réduction connue, sinon masse entrante
+  FINISHED_G = finiBaseG;
+
+  // Écriture silencieuse du taux sur l'OF (pour reporting Odoo), si changé
+  if (hasReduc && mo.id) {
+    const newTaux = Math.round(reducPct * 10) / 10;
+    if (Math.abs((mo.x_studio_taux_reduction || 0) - newTaux) > 0.1) {
+      odoo('mrp.production','write',{ids:[mo.id], vals:{
+        x_studio_taux_reduction: newTaux,
+        x_studio_masse_entrante: Math.round(totalG / 1000 * 1000) / 1000,
+        x_studio_masse_produit_fini: Math.round(finishedG / 1000 * 1000) / 1000
+      }}).catch(()=>{});
+    }
+  }
+
+  document.getElementById('root').innerHTML = `
+    <div class="wrap">
+      <div class="tabs" id="tabsBar" style="display:none">
+        <div class="tab ${activeTab==='prod'?'active':''}" data-action="switchTab" data-tab="prod">📋 Production</div>
+        <div class="tab ${activeTab==='nutri'?'active':''}" data-action="switchTab" data-tab="nutri">📊 Nutritionnel</div>
+        <div class="tab ${activeTab==='label'?'active':''}" data-action="switchTab" data-tab="label">🏷️ Aperçu étiquette</div>
+      </div>
+
+      <!-- ═══ TAB : PRODUCTION ═══ -->
+      <div id="tab-prod" style="display:${activeTab==='prod'?'contents':'none'}">
+
+        <div class="row2">
+          <!-- MO Info -->
+          <div class="card">
+            <div class="card-h">
+              <span class="card-h-title">📋 Ordre de Fabrication</span>
+              <span class="badge ${stCls(mo.state)}">${stLbl(mo.state)}</span>
+            </div>
+            <div class="card-b">
+              <div class="info-g">
+                <div class="ii full">
+                  <label>Produit fini</label>
+                  <div class="v" style="font-size:17px;font-weight:600">${mo.product_id[1]}</div>
+                </div>
+                <div class="ii"><label>Référence MO</label><div class="v">${mo.name}</div></div>
+                <div class="ii"><label>Date de fabrication</label><div class="v">${dateStr}</div></div>
+                <div class="ii">
+                  <label>${isUnits ? 'Bocaux produits' : 'Quantité produite'}</label>
+                  <div class="vbig">${qty} <span>${qtyUnit}</span></div>
+                </div>
+                <div class="ii">
+                  <label>Poids net (contrôle qualité)</label>
+                  <div class="vbig">${poids}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- QC -->
+          <div class="card">
+            <div class="card-h">
+              <span class="card-h-title">🔬 Contrôles qualité</span>
+              <span style="font-size:11px;color:var(--muted)">${checks.length} contrôle${checks.length!==1?'s':''}</span>
+            </div>
+            <div class="card-b">
+              ${checks.length===0 ? `<div style="color:var(--muted);text-align:center;padding:24px;font-size:13px">Aucun contrôle pour ce MO</div>` : `
+              <div class="qc-grid">
+                ${measureQC.map(c=>`
+                  <div class="qc-card ${c.quality_state}">
+                    <div class="qc-title">${c.title}</div>
+                    <div class="qc-val">${c.measure||'—'}</div>
+                    <div class="qc-unit">${c.norm_unit||''}</div>
+                  </div>`).join('')}
+                ${otherQC.map(c=>`
+                  <div class="qc-card ${c.quality_state}">
+                    <div class="qc-title">${c.title}</div>
+                    <div class="qc-val" style="font-size:18px">${c.quality_state==='pass'?'✅':c.quality_state==='fail'?'❌':'⏳'}</div>
+                  </div>`).join('')}
+              </div>`}
+            </div>
+          </div>
+        </div>
+
+        <!-- Ingredients -->
+        <div class="card">
+          <div class="card-h">
+            <span class="card-h-title">🧄 Ingrédients réellement consommés</span>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span class="chip">Étape : ${stepName}</span>
+              <span style="font-size:11px;color:var(--muted)">${INGS.length} ingrédient${INGS.length!==1?'s':''} · ${fmtG(totalG)} total</span>
+              ${showFini ? `<span class="chip" style="background:#fff3e0;color:#e65100" title="Perte de masse à la cuisson">🔥 Réduction ${reducPct.toFixed(0)}% · ${fmtG(totalG)} → ${fmtG(finishedG)}</span>` : ''}
+              <button class="btn btn-o btn-xs" data-action="copyIngredients">Copier liste</button>
+            </div>
+          </div>
+          <div class="card-b">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:10px">💡 Glissez pour réordonner (ordre légal décroissant) · Champ sous le nom : sous-ingrédients d'un ingrédient composé (ex : tomates séchées), enregistré dans Odoo et affiché entre parenthèses sur l'étiquette.</div>
+            <table class="ing-table">
+              <thead>
+                <tr>
+                  <th class="ing-num">#</th>
+                  <th class="ing-drag"></th>
+                  <th>Ingrédient</th>
+                  <th>Lot</th>
+                  <th style="text-align:right">Quantité réelle</th>
+                  <th style="text-align:right">% du total</th>
+                  ${showFini ? '<th style="text-align:right" title="Quantité utilisée pour 100 g de produit fini (base QUID pour produit réduit)">Pour 100 g fini</th>' : ''}
+                </tr>
+              </thead>
+              <tbody id="ingTbody">
+                ${INGS.map((ing,i) => `
+                  <tr draggable="true" data-pid="${ing.product_id[0]}">
+                    <td class="ing-num">${i+1}</td>
+                    <td class="ing-drag">⠿</td>
+                    <td class="ing-name-cell">
+                      <strong>${ing.product_id[1]}</strong>
+                      <input class="sub-ing-inp" draggable="false" data-sub-pid="${ing.product_id[0]}" value="${(ing.sous_ing||'').replace(/"/g,'&quot;')}" placeholder="+ sous-ingrédients si composé (ex : tomates, huile de tournesol, sel)">
+                    </td>
+                    <td class="ing-lot">${ing.lot}</td>
+                    <td class="ing-qty">${fmtG(ing.qty_g)}</td>
+                    <td class="ing-qty">${totalG > 0 ? (ing.qty_g/totalG*100).toFixed(1)+'%' : '—'}</td>
+                    ${showFini ? `<td class="ing-qty"><strong>${fmtG(ing.qty_g/finiBaseG*100)}</strong></td>` : ''}
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /tab-prod -->
+
+      <!-- ═══ TAB : NUTRITIONNEL ═══ -->
+      <div id="tab-nutri" style="display:${activeTab==='nutri'?'contents':'none'}">
+        <div class="card">
+          <div class="card-h">
+            <span class="card-h-title">📊 Valeurs nutritionnelles par matière première (pour 100 g)</span>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-o btn-xs" data-action="saveAllNutri">💾 Sauvegarder</button>
+              <button class="btn btn-o btn-xs" data-action="clearNutri">Effacer tout</button>
+            </div>
+          </div>
+          <div class="card-b">${CLIENT_PRODUCT ? `
+            <div class="nutri-note" style="background:#e3f2fd;border-color:#1565c0;color:#0d47a1">
+              🏷️ <strong>Produit de conditionnement client</strong> (catégorie « Produits clients »). L'app ne calcule <strong>pas</strong> les valeurs nutritionnelles ici : le composant est un vrac fourni par le client. Reprends-les de la fiche technique du client (ou saisis-les sur la fiche produit Odoo du vrac).
+            </div>` : `
+            <div class="nutri-note">
+              ℹ️ Saisissez les valeurs nutritionnelles pour 100 g de chaque matière première.
+              L'app calcule automatiquement les valeurs du produit fini au prorata des quantités réellement consommées.
+              <strong>Les données sont enregistrées dans Odoo sur la fiche produit</strong> — à saisir une seule fois, partagées entre tous les postes (cliquez sur 💾 Sauvegarder).
+            </div>
+            ${showFini ? `<div class="nutri-note" style="background:#fff3e0;border-color:#e65100;color:#8a4b00">
+              🔥 Réduction mesurée <strong>${reducPct.toFixed(0)}%</strong> → marge de sécurité empotage −20% → <strong>${reducUsedPct.toFixed(0)}% retenu</strong>. Les valeurs pour 100 g ci-dessous sont concentrées d'un facteur × ${(totalG/finiBaseG).toFixed(2)} (base : masse effective, poids net × bocaux + marge). L'eau évaporée n'apportant aucun nutriment, c'est une valeur d'étiquette prudente.
+            </div>` : ''}
+            <div class="nutri-wrap">
+              <table class="nutri-table">
+                <thead>
+                  <tr>
+                    <th class="left" style="min-width:180px">Matière première</th>
+                    <th class="qty-col">Consommé</th>
+                    <th class="qty-col">% mix</th>
+                    ${NUTRIENTS.map(n=>`<th>${n.label.replace('dont ','↳ ')}<br><span style="font-weight:400">${n.unit}</span></th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody id="nutriBody">
+                  ${INGS.map(ing => {
+                    const { vals: d, src, ref } = loadNutri(ing.product_id[0], ing.product_id[1]);
+                    const isCQ = src === 'cq';
+                    const pct = totalG > 0 ? (ing.qty_g/totalG*100).toFixed(1)+'%' : '—';
+                    return `<tr data-pid="${ing.product_id[0]}">
+                      <td class="left">
+                        <strong>${ing.product_id[1]}</strong>
+                        ${ref ? `<div class="cq-match">📊 ${ref}</div>` : ''}
+                      </td>
+                      <td class="qty-cell">${fmtG(ing.qty_g)}</td>
+                      <td class="qty-cell">${pct}</td>
+                      ${NUTRIENTS.map(n=>`<td><input type="number" step="0.01" min="0" class="ni${isCQ?' ni-cq':''}" id="ni_${ing.product_id[0]}_${n.key}" value="${d[n.key]||''}" placeholder="—"></td>`).join('')}
+                    </tr>`;
+                  }).join('')}
+                </tbody>
+                <tfoot>
+                  <tr class="total-row">
+                    <td class="left">✅ Produit fini (pour 100 g)${showFini ? ` <span style="font-weight:400">— réduction retenue ${reducUsedPct.toFixed(0)}% (× ${(totalG/finiBaseG).toFixed(2)})</span>` : ''}</td>
+                    <td class="qty-cell">${fmtG(totalG)}</td>
+                    <td class="qty-cell">100%</td>
+                    ${NUTRIENTS.map(n=>`<td id="tot_${n.key}">—</td>`).join('')}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>`}
+          </div>
+        </div>
+      </div><!-- /tab-nutri -->
+
+      <!-- ═══ TAB : APERÇU ÉTIQUETTE ═══ -->
+      <div id="tab-label" style="display:${activeTab==='label'?'contents':'none'}">
+        <div class="card">
+          <div class="card-h">
+            <span class="card-h-title">🏷️ Aperçu de la fiche étiquette</span>
+            <div style="display:flex;gap:10px;align-items:center">
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer" title="Sinon, seul le % de l'ingrédient cité dans le nom du produit est affiché (QUID)">
+                <input type="checkbox" id="chk-show-pct" ${SHOW_ALL_PCT?'checked':''} style="width:15px;height:15px;accent-color:var(--green);cursor:pointer"> Afficher les pourcentages
+              </label>
+              <button class="btn btn-o btn-xs" data-action="copyAll">📋 Tout copier</button>
+              <button class="btn btn-o btn-xs" data-action="copyIllustrator" title="Copier les données pour le script Illustrator">🎨 Illustrator</button>
+              <button class="btn btn-g btn-xs" data-action="printFiche">🖨️ Imprimer</button>
+            </div>
+          </div>
+          <div class="card-b">
+            <div class="lbl-box" id="lbl-box">
+              <div class="lbl-name">${mo.product_id[1]}</div>
+              <div class="lbl-ref">${mo.name} · ${dateStr}</div>
+              <div class="lbl-grid">
+                <div>
+                  <div class="lbl-sec">Ingrédients</div>
+                  <div class="lbl-txt" id="lbl-ing">${boldAllergens(INGS.map(i=>{
+                    const refers = refersToSalesName(i.product_id[1], mo.product_id[1]);
+                    const pct = quidText(i.qty_g, refers, totalG);
+                    const sub = i.sous_ing ? ' (' + i.sous_ing + ')' : '';
+                    return cleanIngName(i.product_id[1]) + sub + pct;
+                  }).join(', '))}</div>
+                  <div class="lbl-sec">Informations</div>
+                  ${mo.x_studio_partner_id ? `<div class="lbl-line"><strong>Client :</strong> ${mo.x_studio_partner_id[1]}</div>` : ''}
+                  <div class="lbl-line"><strong>Poids net :</strong> ${poids}</div>
+                  <div class="lbl-line"><strong>${isUnits?'Nombre de bocaux':'Quantité produite'} :</strong> ${qty} ${qtyUnit}</div>
+                  <div class="lbl-line"><strong>N° de lot :</strong> ${mo.lot_name || '<span style="color:var(--muted);font-style:italic">Non généré</span>'}</div>
+                  <div class="lbl-line"><strong>Référence MO :</strong> ${mo.name}</div>
+                </div>
+                <div>
+                  <div class="lbl-sec">Valeurs nutritionnelles moyennes pour 100 g</div>
+                  <table class="lbl-nt" id="lbl-nt">
+                    <tr><td colspan="2" style="color:var(--muted);font-size:10px;font-style:italic">Calculez les valeurs dans l'onglet Nutritionnel</td></tr>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:10px;text-align:right">
+              <span data-action="showDetails" style="font-size:11px;color:var(--muted);text-decoration:underline;cursor:pointer">Voir les détails de la fabrication</span>
+            </div>
+          </div>
+        </div>
+      </div><!-- /tab-label -->
+
+    </div>
+  `;
+
+  setupDrag();
+  recompute();
+}
+
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+function showDetails() {
+  const bar = document.getElementById('tabsBar');
+  if (bar) bar.style.display = 'flex';
+  switchTab('prod');
+}
+function switchTab(t) {
+  activeTab = t;
+  ['prod','nutri','label'].forEach(id => {
+    const el = document.getElementById('tab-'+id);
+    if (el) el.style.display = id===t ? 'contents' : 'none';
+  });
+  document.querySelectorAll('.tab').forEach((el,i) => {
+    el.classList.toggle('active', ['prod','nutri','label'][i]===t);
+  });
+  if (t==='label') updateLabelNutri();
+}
+
+// ── Drag & drop ingredients ───────────────────────────────────────────────────
+function setupDrag() {
+  const tbody = document.getElementById('ingTbody');
+  if (!tbody) return;
+  let src = null;
+  tbody.querySelectorAll('tr').forEach(row => {
+    row.addEventListener('dragstart', (e) => { if (e.target.closest('.sub-ing-inp')) { e.preventDefault(); return; } src=row; row.classList.add('dragging'); });
+    row.addEventListener('dragend', () => { row.classList.remove('dragging'); reNumberRows(); updateLabelIng(); });
+    row.addEventListener('dragover', e => { e.preventDefault(); row.classList.add('drag-over'); });
+    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+    row.addEventListener('drop', e => {
+      e.preventDefault(); row.classList.remove('drag-over');
+      if (src && src !== row) { const ch=[...tbody.children]; ch.indexOf(src)<ch.indexOf(row) ? row.after(src) : row.before(src); }
+    });
+  });
+}
+function reNumberRows() {
+  document.querySelectorAll('#ingTbody tr').forEach((r,i) => { const c = r.querySelector('.ing-num'); if(c) c.textContent = i+1; });
+}
+function updateLabelIng() {
+  const lbl = document.getElementById('lbl-ing');
+  if (!lbl) return;
+  const totalG = INGS.reduce((s,i) => s+i.qty_g, 0);
+  lbl.innerHTML = boldAllergens([...document.querySelectorAll('#ingTbody tr')].map(row => {
+    const name = row.querySelector('td.ing-name-cell strong')?.textContent || '';
+    const pid = parseInt(row.dataset.pid);
+    const ing = INGS.find(i => i.product_id[0] === pid);
+    const refers = !!(MO && refersToSalesName(name, MO.product_id[1]));
+    const pct = ing ? quidText(ing.qty_g, refers, totalG) : '';
+    const sub = ing && ing.sous_ing ? ' (' + ing.sous_ing + ')' : '';
+    return cleanIngName(name) + sub + pct;
+  }).join(', '));
+}
+
+// ── Nutritional compute ───────────────────────────────────────────────────────
+function recompute() {
+  const totalG = INGS.reduce((s,i)=>s+i.qty_g, 0);
+  if (!totalG) return;
+
+  // Base : masse finie si réduction connue (valeurs concentrées, réelles pour l'étiquette),
+  // sinon masse entrante. Les nutriments sont conservés à la cuisson, seule l'eau s'évapore.
+  const denom = FINISHED_G > 0 ? FINISHED_G : totalG;
+
+  const totals = {};
+  NUTRIENTS.forEach(n => totals[n.key] = 0);
+
+  let hasAny = false;
+  for (const ing of INGS) {
+    const pid = ing.product_id[0];
+    NUTRIENTS.forEach(n => {
+      const el = document.getElementById(`ni_${pid}_${n.key}`);
+      const v = el ? parseFloat(el.value) : NaN;
+      if (!isNaN(v) && v !== '') { totals[n.key] += ing.qty_g * v / 100; hasAny = true; }
+    });
+  }
+
+  // Valeurs pour 100 g de produit fini (après réduction si connue)
+  NUTRIENTS.forEach(n => {
+    const el = document.getElementById(`tot_${n.key}`);
+    if (el) el.textContent = hasAny ? (totals[n.key] / denom * 100).toFixed(2).replace(/\.?0+$/,'') : '—';
+  });
+
+  if (activeTab === 'label') updateLabelNutri();
+}
+
+function updateLabelNutri() {
+  const table = document.getElementById('lbl-nt');
+  if (!table) return;
+  if (CLIENT_PRODUCT) {
+    table.innerHTML = '<tr><td colspan="2" style="color:var(--muted);font-size:10px;font-style:italic">Produit client — valeurs à reprendre de la fiche du client</td></tr>';
+    return;
+  }
+  const totalG = INGS.reduce((s,i)=>s+i.qty_g, 0);
+
+  const rows = NUTRIENTS.map(n => {
+    const el = document.getElementById(`tot_${n.key}`);
+    const val = el?.textContent;
+    if (!val || val === '—') return null;
+    return { n, val };
+  }).filter(Boolean);
+
+  if (!rows.length) {
+    table.innerHTML = '<tr><td colspan="2" style="color:var(--muted);font-size:10px;font-style:italic">Calculez les valeurs dans l\'onglet Nutritionnel</td></tr>';
+    return;
+  }
+  table.innerHTML = rows.map(({n,val}) =>
+    `<tr class="${n.sub?'lsub':''}"><td>${n.label}</td><td>${val} ${n.unit}</td></tr>`
+  ).join('');
+}
+
+async function saveAllNutri() {
+  toast('💾 Sauvegarde dans Odoo…');
+  let fail = 0;
+  const doneTmpl = new Set();
+  for (const ing of INGS) {
+    const pid = ing.product_id[0];
+    const tmplId = ing.tmpl_id;
+    const data = {}, vals = {};
+    NUTRIENTS.forEach(n => {
+      const el = document.getElementById(`ni_${pid}_${n.key}`);
+      const v = el ? parseFloat(el.value) : NaN;
+      if (!isNaN(v)) data[n.key] = v;
+      vals['x_studio_nutri_' + n.key] = isNaN(v) ? 0 : v;
+    });
+    saveNutriPid(pid, data); // cache local
+    if (Object.keys(data).length) NUTRI_DB[pid] = data; else delete NUTRI_DB[pid];
+    // Écriture sur le modèle produit (une fois par template)
+    if (!tmplId || doneTmpl.has(tmplId)) continue;
+    doneTmpl.add(tmplId);
+    try {
+      await odoo('product.template','write',{ids:[tmplId], vals});
+    } catch(e) { fail++; }
+  }
+  toast(fail ? `⚠️ Sauvegarde partielle : ${fail} erreur(s)` : '💾 Valeurs sauvegardées dans Odoo (partagées)');
+}
+
+async function clearNutri() {
+  if (!confirm('Effacer toutes les valeurs nutritionnelles de ces ingrédients (pour tout le monde) ?')) return;
+  const doneTmpl = new Set();
+  for (const ing of INGS) {
+    const pid = ing.product_id[0];
+    NUTRIENTS.forEach(n => {
+      localStorage.removeItem(nutriKey(pid, n.key));
+      const el = document.getElementById(`ni_${pid}_${n.key}`);
+      if (el) el.value = '';
+    });
+    delete NUTRI_DB[pid];
+    const tmplId = ing.tmpl_id;
+    if (!tmplId || doneTmpl.has(tmplId)) continue;
+    doneTmpl.add(tmplId);
+    const vals = {}; NUTRIENTS.forEach(n => vals['x_studio_nutri_' + n.key] = 0);
+    try { await odoo('product.template','write',{ids:[tmplId], vals}); } catch(e) {}
+  }
+  recompute();
+  toast('🗑️ Valeurs effacées (Odoo inclus)');
+}
+
+// ── Copy / print ──────────────────────────────────────────────────────────────
+function ingWithSub(row) {
+  const name = row.querySelector('td.ing-name-cell strong')?.textContent || '';
+  const pid = parseInt(row.dataset.pid);
+  const ing = INGS.find(i => i.product_id[0] === pid);
+  return cleanIngName(name) + (ing && ing.sous_ing ? ' (' + ing.sous_ing + ')' : '');
+}
+function copyIngredients() {
+  const names = [...document.querySelectorAll('#ingTbody tr')].map(ingWithSub);
+  navigator.clipboard?.writeText(names.join(', '));
+  toast('📋 Ingrédients copiés');
+}
+
+function copyAll() {
+  if (!MO) return;
+  const ings = [...document.querySelectorAll('#ingTbody tr')].map(ingWithSub);
+  const lines = [
+    `FICHE ÉTIQUETTE — ${MO.product_id[1]}`,
+    MO.x_studio_partner_id ? `Client : ${MO.x_studio_partner_id[1]}` : null,
+    `MO : ${MO.name}`,
+    `N° de lot : ${MO.lot_name || 'Non généré'}`,
+    `Date : ${MO.date_start ? new Date(MO.date_start).toLocaleDateString('fr-FR') : '—'}`,
+    '',
+    'INGRÉDIENTS (ordre réel décroissant) :',
+    ings.join(', '),
+    '',
+    'PRODUCTION :',
+    `Quantité : ${(MO.state==='done'&&MO.qty_produced>0)?MO.qty_produced:(MO.qty_producing>0?MO.qty_producing:MO.product_qty)} ${MO.product_uom_id?.[1]||''}`,
+  ];
+  NUTRIENTS.forEach(n => {
+    const el = document.getElementById(`tot_${n.key}`);
+    if (el && el.textContent && el.textContent !== '—') lines.push(`${n.label} : ${el.textContent} ${n.unit}/100g`);
+  });
+  navigator.clipboard?.writeText(lines.filter(l => l !== null).join('\n'));
+  toast('📋 Fiche complète copiée');
+}
+
+// Délégation input pour les champs nutritionnels dynamiques
+document.addEventListener('input', e => {
+  if (e.target.classList.contains('ni')) recompute();
+});
+
+// Sauvegarde des sous-ingrédients (ingrédient composé) → Odoo, partagé
+document.addEventListener('change', e => {
+  // Case « Afficher les pourcentages » de l'aperçu étiquette
+  if (e.target.id === 'chk-show-pct') {
+    SHOW_ALL_PCT = e.target.checked;
+    try { localStorage.setItem('lcp_show_all_pct', SHOW_ALL_PCT ? '1' : '0'); } catch(_){}
+    updateLabelIng();
+    return;
+  }
+  if (!e.target.classList.contains('sub-ing-inp')) return;
+  const pid = parseInt(e.target.dataset.subPid);
+  const val = e.target.value.trim();
+  const ing = INGS.find(i => i.product_id[0] === pid);
+  if (ing) ing.sous_ing = val;
+  updateLabelIng();
+  const tmplId = ing && ing.tmpl_id;
+  if (!tmplId) { toast('⚠️ Produit sans modèle — non enregistré'); return; }
+  odoo('product.template','write',{ids:[tmplId], vals:{x_studio_sous_ingredients: val || false}})
+    .then(() => toast('💾 Sous-ingrédients enregistrés (partagé)'))
+    .catch(err => toast('⚠️ Odoo : ' + err.message));
+});
+
+// ── Export vers Illustrator (presse-papier JSON, lu par le script LCP.jsx) ──────
+function copyForIllustrator() {
+  if (!MO) { toast('Ouvre d\'abord une fabrication'); return; }
+  const totalG = INGS.reduce((s,i)=>s+i.qty_g, 0);
+  const denom = FINISHED_G > 0 ? FINISHED_G : totalG;
+
+  // Liste d'ingrédients (mêmes règles que l'aperçu : nom nettoyé, sous-ing, QUID)
+  const plain = INGS.map(i => {
+    const refers = refersToSalesName(i.product_id[1], MO.product_id[1]);
+    const pct = quidText(i.qty_g, refers, totalG);
+    const sub = i.sous_ing ? ' (' + i.sous_ing + ')' : '';
+    return cleanIngName(i.product_id[1]) + sub + pct;
+  }).join(', ');
+  const runs = allergenRuns(plain);
+
+  // Valeurs nutritionnelles pour 100 g de produit fini
+  const totals = {}; NUTRIENTS.forEach(n => totals[n.key] = 0); let hasN = false;
+  for (const ing of INGS) {
+    const pid = ing.product_id[0];
+    const src = loadNutri(pid, ing.product_id[1]).vals;
+    NUTRIENTS.forEach(n => {
+      const el = document.getElementById('ni_'+pid+'_'+n.key);
+      const v = (el && el.value !== '') ? parseFloat(el.value) : parseFloat(src[n.key]);
+      if (!isNaN(v)) { totals[n.key] += ing.qty_g * v / 100; hasN = true; }
+    });
+  }
+  const nutri = {};
+  NUTRIENTS.forEach(n => {
+    nutri[n.key] = (hasN && denom > 0)
+      ? String(+(totals[n.key]/denom*100).toFixed((n.key==='kcal'||n.key==='kj') ? 0 : 1))
+      : '';
+  });
+
+  // Mention QUID (ingrédient(s) de la dénomination)
+  const quid = INGS.filter(i => refersToSalesName(i.product_id[1], MO.product_id[1])).map(i => {
+    const q = denom > 0 ? i.qty_g/denom*100 : 0;
+    const nom = cleanIngName(i.product_id[1]).toLowerCase();
+    return q > 100
+      ? 'élaboré avec ' + Math.round(q) + ' g de ' + nom + ' pour 100 g de produit fini'
+      : nom + ' ' + q.toFixed(1) + '%';
+  }).join(' ; ');
+
+  const qtyUnit = MO.product_uom_id?.[1] || '';
+  const qty = MO.state==='done'&&MO.qty_produced>0 ? MO.qty_produced : (MO.qty_producing>0 ? MO.qty_producing : MO.product_qty);
+  const payload = {
+    denomination: cleanIngName(MO.product_id[1]),
+    poids_net: MO.poids_net_str || '',
+    lot: MO.lot_name || '',
+    client: MO.x_studio_partner_id ? MO.x_studio_partner_id[1] : '',
+    mo: MO.name,
+    date: MO.date_start ? new Date(MO.date_start).toLocaleDateString('fr-FR') : '',
+    quantite: qty + ' ' + qtyUnit,
+    quid: quid,
+    ingredients: runs,
+    ingredients_plain: plain,
+    nutri: nutri
+  };
+  navigator.clipboard?.writeText(JSON.stringify(payload));
+  toast('📋 Données copiées — colle-les dans le script Illustrator');
+}
+
+function printFiche() {
+  const box = document.getElementById('lbl-box');
+  if (!box) return;
+  updateLabelNutri();
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html lang="fr"><head>
+    <meta charset="UTF-8"><title>Étiquette — ${MO?.product_id?.[1]||''}</title>
+    <style>
+      body{font-family:Georgia,serif;margin:20mm;color:#000}
+      .lbl-name{font-size:22px;font-weight:bold;color:#1b5e3b;margin-bottom:2px}
+      .lbl-ref{font-size:10px;color:#666;margin-bottom:14px}
+      .lbl-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+      .lbl-sec{font-size:8px;text-transform:uppercase;letter-spacing:.8px;color:#666;border-bottom:1px solid #ddd;padding-bottom:3px;margin:14px 0 6px;font-family:sans-serif}
+      .lbl-sec:first-child{margin-top:0}
+      .lbl-txt{font-size:10px;line-height:1.6}
+      .lbl-line{font-size:11px;margin-bottom:3px}
+      .lbl-nt{font-size:9px;width:100%;border-collapse:collapse}
+      .lbl-nt td{padding:2px 0;border-bottom:1px solid #f0f0f0}
+      .lbl-nt td:last-child{text-align:right}
+      .lsub td:first-child{padding-left:12px;color:#666}
+      @media print{@page{margin:15mm}body{margin:0}}
+    </style>
+  </head><body>${box.innerHTML}</body></html>`);
+  w.document.close();
+  setTimeout(() => w.print(), 400);
+}
+
+// ── Page d'accueil : produits à l'étiquetage ──────────────────────────────────
+async function initHomePage() {
+  const root = document.getElementById('root');
+  try {
+    // 1. MOs en cours de fabrication
+    const mos = await odoo('mrp.production','search_read',{
+      domain:[['state','in',['progress','confirmed','to_close']]],
+      fields:['id','name','product_id','workorder_ids','qty_producing','product_qty','qty_produced','state','product_uom_id','x_studio_partner_id','x_studio_etiquette_imprimee','x_studio_design_fait'],
+      limit:100,
+      order:'id desc'
+    });
+
+    if (!mos.length) {
+      root.innerHTML = `<div class="empty"><div class="empty-icon">✅</div>
+        <div class="empty-title">Aucune fabrication en cours</div>
+        <div class="empty-sub">Tapez une référence MO ou cliquez sur « Récents ».</div></div>`;
+      return;
+    }
+
+    // 2. Récupérer tous les workorders de ces MOs en une seule requête
+    const allWoIds = mos.flatMap(m => m.workorder_ids || []);
+    let etiquetageMoIds = new Set();
+
+    if (allWoIds.length) {
+      const wos = await odoo('mrp.workorder','search_read',{
+        domain:[['id','in',allWoIds],['workcenter_id.x_studio_fournee_behavior','=','etiquetage']],
+        fields:['production_id','state','name'],
+        limit:200
+      });
+      // Garder ceux dont le WO étiquetage est en attente ou en cours
+      for (const wo of wos) {
+        if (['ready','progress','blocked','done'].includes(wo.state)) {
+          etiquetageMoIds.add(wo.production_id[0]);
+        }
+      }
+    }
+
+    const toShow = mos.filter(m => etiquetageMoIds.has(m.id));
+
+    if (!toShow.length) {
+      root.innerHTML = `<div class="empty"><div class="empty-icon">🏷️</div>
+        <div class="empty-title">Aucun produit en attente d'étiquetage</div>
+        <div class="empty-sub">Tapez une référence MO ou cliquez sur « Récents ».</div></div>`;
+      return;
+    }
+
+    // 3. Affichage
+    const rows = toShow.map(mo => {
+      const qty = (mo.state==='done' && mo.qty_produced>0) ? mo.qty_produced
+                : (mo.qty_producing>0 ? mo.qty_producing : mo.product_qty);
+      const unit = mo.product_uom_id?.[1] || '';
+      const printed = !!mo.x_studio_etiquette_imprimee;
+      const designed = !!mo.x_studio_design_fait;
+      const client = mo.x_studio_partner_id ? mo.x_studio_partner_id[1] : '';
+      return `<div class="drop-row ${printed?'row-printed':''}" data-mo-id="${mo.id}" style="cursor:pointer">
+        <div>
+          <div class="d-name" style="font-weight:600">${mo.product_id[1]}${client ? ` <span style="font-weight:400;color:var(--green)">· ${client}</span>` : ''}</div>
+          <div class="d-last-mo">${mo.name} · ${qty} ${unit}</div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center">
+          <span class="badge ${stCls(mo.state)}">${stLbl(mo.state)}</span>
+          <label class="chk-design" title="Design fait">
+            <input type="checkbox" data-design-mo="${mo.id}" ${designed?'checked':''}>
+            Design fait
+          </label>
+          <label class="chk-print" title="Étiquette imprimée">
+            <input type="checkbox" data-printed-mo="${mo.id}" ${printed?'checked':''}>
+            Imprimée
+          </label>
+        </div>
+      </div>`;
+    }).join('');
+
+    root.innerHTML = `
+      <div style="padding:16px 20px 8px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px">🏷️</span>
+        <strong style="font-size:14px;color:var(--green-dark)">Produits à l'étiquetage</strong>
+        <span style="font-size:12px;color:var(--muted);margin-left:4px">${toShow.length} ordre${toShow.length>1?'s':''}</span>
+        <button data-action="refreshHome" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer">↻ Actualiser</button>
+      </div>
+      <div style="padding:0 12px 12px">${rows}</div>`;
+  } catch(e) {
+    root.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>
+      <div class="empty-title">Erreur</div>
+      <div class="empty-sub">${e.message}</div></div>`;
+  }
+}
+
+// Lancer au démarrage
+initHomePage();
+</script>
+</body>
+</html>
