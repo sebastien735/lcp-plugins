@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<script type="application/json" id="cowork-artifact-meta">
+{
+  "name": "Stock Fruits Legumes Clients Lcp",
+  "schemaVersion": 1,
+  "description": "Dashboard « Stock fruits & légumes par client » (Les Cuisiniers du Potager). Branché en direct sur Odoo 19 production. Onglet Stock (lots en stock net > 0, KPIs, graphique BIO/non-BIO par client, cartes clients, filtres, modes Vue globale/Par produit) et onglet Réceptions (stock.move.line entrantes par période).",
+  "mcpTools": [
+    "mcp__odoo19_prod__odoo_call"
+  ],
+  "mcpServerNames": [
+    "odoo19_prod"
+  ]
+}
+</script>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stock fruits &amp; légumes par client</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f6f7f9; color: #1f2937; font-size: 14px;
+}
+h1 { font-size: 18px; margin: 0 0 4px; }
+.subtitle { color: #6b7280; font-size: 12px; margin-bottom: 14px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.kpi { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 14px; }
+.kpi .val { font-size: 22px; font-weight: 700; }
+.kpi .lbl { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
+.filters select, .filters input {
+  padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; font-size: 13px; color: #1f2937;
+}
+.filters input { min-width: 180px; }
+.bio-toggle { display: flex; border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden; background: #fff; }
+.bio-toggle button { border: 0; background: #fff; padding: 7px 12px; font-size: 13px; cursor: pointer; color: #374151; }
+.bio-toggle button.on { background: #16a34a; color: #fff; }
+.tabs { display: flex; gap: 4px; border-bottom: 2px solid #e5e7eb; margin-bottom: 14px; }
+.tabs button {
+  border: 0; background: none; padding: 8px 18px; font-size: 14px; font-weight: 600;
+  cursor: pointer; color: #6b7280; border-bottom: 2px solid transparent; margin-bottom: -2px;
+}
+.tabs button.on { color: #2563eb; border-bottom-color: #2563eb; }
+.mode-toggle { display: flex; border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden; background: #fff; margin-bottom: 12px; width: fit-content; }
+.mode-toggle button { border: 0; background: #fff; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; color: #374151; }
+.mode-toggle button.on { background: #2563eb; color: #fff; }
+#fProduct { display: none; font-weight: 600; }
+body.mode-product #fProduct { display: inline-block; }
+body.mode-product #fSearch { display: none; }
+.reset-btn { border: 0; background: none; color: #2563eb; cursor: pointer; font-size: 13px; }
+.layout { display: grid; grid-template-columns: 1fr; gap: 14px; }
+.panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; }
+.panel h2 { font-size: 13px; margin: 0 0 10px; color: #374151; text-transform: uppercase; letter-spacing: .04em; }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.fold-btns { display: flex; gap: 6px; }
+.fold-btns button {
+  border: 1px solid #d1d5db; background: #fff; border-radius: 6px; padding: 3px 10px;
+  font-size: 12px; color: #374151; cursor: pointer;
+}
+.fold-btns button:hover { background: #f3f4f6; }
+#chartWrap { height: 260px; position: relative; }
+.client-card { border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+.client-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 10px 14px; cursor: pointer; background: #fafafa;
+}
+.client-head:hover { background: #f3f4f6; }
+.client-head .cname { font-weight: 600; }
+.client-head .cmeta { color: #6b7280; font-size: 12px; }
+.client-head .ctotal { font-weight: 700; white-space: nowrap; }
+.client-body { display: none; }
+.client-card.open .client-body { display: block; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 7px 10px; border-top: 1px solid #f0f0f2; }
+th { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .03em; cursor: pointer; user-select: none; border-top: 0; }
+th .arr { font-size: 9px; }
+td.num, th.num { text-align: right; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.badge.bio { background: #dcfce7; color: #15803d; }
+.badge.cat-fb { background: #fee2e2; color: #b91c1c; }
+.badge.cat-fp { background: #ffedd5; color: #c2410c; }
+.badge.cat-lb { background: #dbeafe; color: #1d4ed8; }
+.badge.cat-lp { background: #ede9fe; color: #6d28d9; }
+.loc { color: #6b7280; }
+.lotname { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+.empty { text-align: center; color: #6b7280; padding: 30px 0; }
+#status { color: #6b7280; padding: 40px 0; text-align: center; }
+.err { color: #b91c1c; background: #fee2e2; border-radius: 8px; padding: 12px; white-space: pre-wrap; }
+.exp-soon { color: #b91c1c; font-weight: 600; }
+tr.subtotal td { background: #f8fafc; font-weight: 700; color: #374151; border-top: 1px solid #e5e7eb; }
+tr.subtotal td:first-child { font-size: 12px; }
+tr.lot-row { cursor: pointer; }
+tr.lot-row:hover td { background: #f0f7ff; }
+.cont-count { font-size: 10px; color: #2563eb; font-weight: 600; margin-left: 6px; background: #eff6ff; border-radius: 999px; padding: 1px 7px; }
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 50; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow: auto; }
+.modal-overlay.open { display: flex; }
+.modal { background: #fff; border-radius: 12px; max-width: 660px; width: 100%; padding: 20px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+.modal-close { position: absolute; top: 8px; right: 12px; border: 0; background: none; font-size: 26px; line-height: 1; cursor: pointer; color: #6b7280; }
+.modal-close:hover { color: #1f2937; }
+.lm-head { margin-bottom: 14px; padding-right: 24px; }
+.lm-title { font-size: 16px; font-weight: 700; }
+.lm-sub { color: #6b7280; font-size: 13px; margin-top: 4px; }
+.lm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.lm-cell { background: #f8fafc; border: 1px solid #eef0f3; border-radius: 8px; padding: 8px 10px; }
+.lm-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; }
+.lm-val { font-size: 14px; font-weight: 600; margin-top: 2px; }
+.lm-h3 { font-size: 13px; margin: 4px 0 8px; color: #374151; text-transform: uppercase; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+<h1>Stock fruits &amp; légumes par client</h1>
+<div class="subtitle">Lots en stock (quantité &gt; 0) — catégories Fruits bruts, Fruits préparés, Légumes bruts, Légumes préparés &amp; sous-catégories. Source : Odoo prod. <span id="loadedAt"></span></div>
+
+<div id="status">Chargement des données Odoo…</div>
+
+<div id="app" style="display:none">
+  <div class="tabs">
+    <button data-t="stock" class="on">Stock</button>
+    <button data-t="receptions">Réceptions</button>
+  </div>
+
+<div id="tabStock">
+  <div class="kpis">
+    <div class="kpi"><div class="val" id="kpiQty">–</div><div class="lbl">kg en stock</div></div>
+    <div class="kpi"><div class="val" id="kpiLots">–</div><div class="lbl">Lots</div></div>
+    <div class="kpi"><div class="val" id="kpiClients">–</div><div class="lbl">Clients / fournisseurs</div></div>
+    <div class="kpi"><div class="val" id="kpiBio">–</div><div class="lbl">kg BIO</div></div>
+  </div>
+
+  <div class="mode-toggle" id="mode">
+    <button data-m="client" class="on">Vue globale</button>
+    <button data-m="product">Par produit</button>
+  </div>
+
+  <div class="filters">
+    <select id="fProduct"><option value="">Choisir un produit…</option></select>
+    <input type="search" id="fSearch" placeholder="Rechercher produit ou lot…">
+    <select id="fClient"><option value="">Tous les clients</option></select>
+    <select id="fCat"><option value="">Toutes catégories</option></select>
+    <select id="fLoc"><option value="">Tous emplacements</option></select>
+    <div class="bio-toggle" id="fBio">
+      <button data-v="" class="on">Tous</button>
+      <button data-v="bio">BIO</button>
+      <button data-v="nonbio">Non BIO</button>
+    </div>
+    <button class="reset-btn" id="fReset">Réinitialiser</button>
+  </div>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>Quantité par client (kg)</h2>
+      <div id="chartWrap"><canvas id="chart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Détail par client</h2>
+        <div class="fold-btns">
+          <button data-target="clients" data-open="1">Tout déplier</button>
+          <button data-target="clients" data-open="0">Tout replier</button>
+        </div>
+      </div>
+      <div id="clients"></div>
+    </div>
+  </div>
+</div><!-- /tabStock -->
+
+<div id="tabReceptions" style="display:none">
+  <div class="kpis">
+    <div class="kpi"><div class="val" id="rKpiQty">–</div><div class="lbl">kg reçus</div></div>
+    <div class="kpi"><div class="val" id="rKpiOps">–</div><div class="lbl">Réceptions</div></div>
+    <div class="kpi"><div class="val" id="rKpiClients">–</div><div class="lbl">Clients / fournisseurs</div></div>
+    <div class="kpi"><div class="val" id="rKpiProducts">–</div><div class="lbl">Produits différents</div></div>
+  </div>
+
+  <div class="filters">
+    <select id="rPeriod">
+      <option value="this_month">Ce mois-ci</option>
+      <option value="last_month">Mois dernier</option>
+      <option value="this_year" selected>Cette année</option>
+      <option value="last_year">Année dernière</option>
+      <option value="last_30">30 derniers jours</option>
+      <option value="all">Tout l'historique</option>
+      <option value="custom">Période personnalisée…</option>
+    </select>
+    <input type="date" id="rFrom" style="display:none">
+    <input type="date" id="rTo" style="display:none">
+    <select id="rClient"><option value="">Tous les clients</option></select>
+    <select id="rCat"><option value="">Toutes catégories</option></select>
+    <input type="search" id="rSearch" placeholder="Rechercher produit ou lot…">
+  </div>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>Kg reçus par client</h2>
+      <div id="rChartWrap" style="height:260px;position:relative"><canvas id="rChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Détail par client</h2>
+        <div class="fold-btns">
+          <button data-target="rClients" data-open="1">Tout déplier</button>
+          <button data-target="rClients" data-open="0">Tout replier</button>
+        </div>
+      </div>
+      <div id="rClients"><div class="empty">Chargement…</div></div>
+    </div>
+  </div>
+</div><!-- /tabReceptions -->
+
+</div>
+
+<div id="lotModal" class="modal-overlay">
+  <div class="modal">
+    <button class="modal-close" id="lotModalClose" aria-label="Fermer">&times;</button>
+    <div id="lotModalBody"></div>
+  </div>
+</div>
+
+<script>
+const CATS = [228, 236, 244, 251];
+const ROOT_LABELS = {
+  "Fruits bruts": "cat-fb",
+  "Fruits préparés": "cat-fp",
+  "Légumes Bruts": "cat-lb",
+  "Légumes préparés": "cat-lp"
+};
+let rows = [];       // enriched lot rows
+let chart = null;
+let sortKey = "quantity", sortDir = -1;
+
+function parseOdoo(r) {
+  if (r.isError) {
+    const t = r.content && r.content[0] ? r.content[0].text : "Erreur MCP";
+    throw new Error(t);
+  }
+  let payload = r.structuredContent;
+  if (!payload && r.content && r.content[0]) {
+    try { payload = JSON.parse(r.content[0].text); } catch (e) { payload = { result: r.content[0].text }; }
+  }
+  let res = payload && payload.result !== undefined ? payload.result : payload;
+  if (typeof res === "string") { try { res = JSON.parse(res); } catch (e) {} }
+  return res;
+}
+
+async function odoo(model, method, params) {
+  const r = await window.cowork.callMcpTool("mcp__odoo19_prod__odoo_call", { model, method, params });
+  return parseOdoo(r);
+}
+
+function rootCat(displayName) {
+  const root = String(displayName).split(" / ")[0].trim();
+  return root;
+}
+
+async function loadData() {
+  // Pas de filtre quantity > 0 : on prend aussi les quants négatifs (ex : conso
+  // production sur WH/Stock) et on calcule le NET par lot, comme Odoo.
+  const quants = await odoo("stock.quant", "search_read", {
+    domain: [["product_id.categ_id", "child_of", CATS], ["location_id.usage", "=", "internal"], ["lot_id", "!=", false]],
+    fields: ["product_id", "lot_id", "location_id", "quantity", "product_uom_id", "owner_id"],
+    limit: 5000
+  });
+  const lotIds = [...new Set(quants.map(q => q.lot_id[0]))];
+  const prodIds = [...new Set(quants.map(q => q.product_id[0]))];
+  const [lots, products] = await Promise.all([
+    lotIds.length ? odoo("stock.lot", "read", { ids: lotIds, fields: ["name", "x_studio_bio", "x_studio_fournisseur_custom", "expiration_date", "x_studio_contenants"] }) : [],
+    prodIds.length ? odoo("product.product", "read", { ids: prodIds, fields: ["display_name", "categ_id"] }) : []
+  ]);
+  const lotById = Object.fromEntries(lots.map(l => [l.id, l]));
+  const prodById = Object.fromEntries(products.map(p => [p.id, p]));
+
+  // Agrégation par LOT : net sur tous les emplacements internes (les quants
+  // négatifs annulent le stock, ex : conso production imputée sur WH/Stock).
+  const agg = new Map();
+  for (const q of quants) {
+    const key = q.lot_id[0];
+    if (!agg.has(key)) {
+      const lot = lotById[key] || {};
+      const prod = prodById[q.product_id[0]] || {};
+      const categName = prod.categ_id ? prod.categ_id[1] : "?";
+      const client = (lot.x_studio_fournisseur_custom && lot.x_studio_fournisseur_custom[1])
+        || (q.owner_id && q.owner_id[1]) || "Non attribué";
+      agg.set(key, {
+        lot: lot.name || q.lot_id[1],
+        product: prod.display_name || q.product_id[1],
+        categ: categName,
+        root: rootCat(categName),
+        client: client,
+        locQty: new Map(),
+        quantity: 0,
+        uom: q.product_uom_id ? q.product_uom_id[1] : "kg",
+        bio: !!lot.x_studio_bio,
+        expiration: lot.expiration_date ? String(lot.expiration_date).slice(0, 10) : "",
+        contenants: Array.isArray(lot.x_studio_contenants) ? lot.x_studio_contenants : []
+      });
+    }
+    const r = agg.get(key);
+    r.quantity += q.quantity;
+    r.locQty.set(q.location_id[1], (r.locQty.get(q.location_id[1]) || 0) + q.quantity);
+  }
+  // Ne garder que les lots avec un stock net > 0 (comme la vue Stock d'Odoo)
+  rows = [...agg.values()].filter(r => r.quantity > 0.001);
+  for (const r of rows) {
+    r.locations = [...r.locQty.entries()].filter(e => e[1] > 0.001)
+      .sort((a, b) => b[1] - a[1]).map(e => e[0]);
+    r.location = r.locations.join(" · ") || "?";
+    delete r.locQty;
+  }
+}
+
+function fmt(n) {
+  return n.toLocaleString("fr-FR", { maximumFractionDigits: 2 });
+}
+
+function getMode() { return document.querySelector("#mode button.on").dataset.m; }
+
+function getFilters() {
+  return {
+    mode: getMode(),
+    product: document.getElementById("fProduct").value,
+    search: document.getElementById("fSearch").value.trim().toLowerCase(),
+    client: document.getElementById("fClient").value,
+    cat: document.getElementById("fCat").value,
+    loc: document.getElementById("fLoc").value,
+    bio: document.querySelector("#fBio button.on").dataset.v
+  };
+}
+
+function saveFilters(f) { try { localStorage.setItem("stockFilters", JSON.stringify(f)); } catch (e) {} }
+function restoreFilters() {
+  let f; try { f = JSON.parse(localStorage.getItem("stockFilters") || "{}"); } catch (e) { f = {}; }
+  if (f.search) document.getElementById("fSearch").value = f.search;
+  for (const [id, v] of [["fClient", f.client], ["fCat", f.cat], ["fLoc", f.loc]]) {
+    const el = document.getElementById(id);
+    if (v && [...el.options].some(o => o.value === v)) el.value = v;
+  }
+  if (f.bio !== undefined) {
+    document.querySelectorAll("#fBio button").forEach(b => b.classList.toggle("on", b.dataset.v === f.bio));
+    if (!document.querySelector("#fBio button.on")) document.querySelector('#fBio button[data-v=""]').classList.add("on");
+  }
+  if (f.mode === "product") {
+    document.querySelectorAll("#mode button").forEach(b => b.classList.toggle("on", b.dataset.m === "product"));
+  }
+  const pEl = document.getElementById("fProduct");
+  if (f.product && [...pEl.options].some(o => o.value === f.product)) pEl.value = f.product;
+  document.body.classList.toggle("mode-product", getMode() === "product");
+}
+
+function filteredRows() {
+  const f = getFilters();
+  saveFilters(f);
+  return rows.filter(r =>
+    (f.mode !== "product" || !f.product || r.product === f.product) &&
+    (f.mode === "product" || !f.search || r.product.toLowerCase().includes(f.search) || r.lot.toLowerCase().includes(f.search)) &&
+    (!f.client || r.client === f.client) &&
+    (!f.cat || r.root === f.cat) &&
+    (!f.loc || r.locations.includes(f.loc)) &&
+    (!f.bio || (f.bio === "bio" ? r.bio : !r.bio))
+  );
+}
+
+function fillSelect(id, values) {
+  const el = document.getElementById(id);
+  const first = el.options[0];
+  el.innerHTML = ""; el.appendChild(first);
+  for (const v of values) {
+    const o = document.createElement("option");
+    o.value = v; o.textContent = v;
+    el.appendChild(o);
+  }
+}
+
+function catBadge(r) {
+  const cls = ROOT_LABELS[r.root] || "cat-lb";
+  return '<span class="badge ' + cls + '">' + r.root + "</span>";
+}
+
+function render() {
+  const data = filteredRows();
+  const totQty = data.reduce((s, r) => s + r.quantity, 0);
+  const bioQty = data.filter(r => r.bio).reduce((s, r) => s + r.quantity, 0);
+  const clients = new Set(data.map(r => r.client));
+  document.getElementById("kpiQty").textContent = fmt(totQty);
+  document.getElementById("kpiLots").textContent = data.length;
+  document.getElementById("kpiClients").textContent = clients.size;
+  document.getElementById("kpiBio").textContent = fmt(bioQty);
+
+  // group by client
+  const byClient = new Map();
+  for (const r of data) {
+    if (!byClient.has(r.client)) byClient.set(r.client, []);
+    byClient.get(r.client).push(r);
+  }
+  const sorted = [...byClient.entries()].sort((a, b) =>
+    b[1].reduce((s, r) => s + r.quantity, 0) - a[1].reduce((s, r) => s + r.quantity, 0));
+
+  // chart
+  const labels = sorted.map(e => e[0]);
+  const vals = sorted.map(e => e[1].reduce((s, r) => s + r.quantity, 0));
+  const bioVals = sorted.map(e => e[1].filter(r => r.bio).reduce((s, r) => s + r.quantity, 0));
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById("chart"), {
+    type: "bar",
+    data: { labels, datasets: [
+      { label: "Non BIO", data: vals.map((v, i) => v - bioVals[i]), backgroundColor: "#60a5fa", stack: "s" },
+      { label: "BIO", data: bioVals, backgroundColor: "#22c55e", stack: "s" }
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: "y",
+      scales: { x: { stacked: true }, y: { stacked: true, ticks: { autoSkip: false, font: { size: 11 } } } },
+      plugins: { legend: { position: "bottom" } }
+    }
+  });
+
+  // client cards
+  const soon = new Date(); soon.setDate(soon.getDate() + 7);
+  const soonStr = soon.toISOString().slice(0, 10);
+  const container = document.getElementById("clients");
+  container.innerHTML = "";
+  if (!sorted.length) { container.innerHTML = '<div class="empty">Aucun lot ne correspond aux filtres.</div>'; return; }
+  const openSet = new Set(JSON.parse(sessionStorage.getItem("openClients") || "[]"));
+  const productSelected = getMode() === "product" && document.getElementById("fProduct").value;
+  for (const [client, list] of sorted) {
+    const tot = list.reduce((s, r) => s + r.quantity, 0);
+    const bio = list.filter(r => r.bio).length;
+    // Groupement par produit (sous-total si plusieurs lots du même produit)
+    const byProd = new Map();
+    for (const r of list) {
+      if (!byProd.has(r.product)) byProd.set(r.product, []);
+      byProd.get(r.product).push(r);
+    }
+    const prodGroups = [...byProd.entries()].sort((a, b) =>
+      b[1].reduce((s, r) => s + r.quantity, 0) - a[1].reduce((s, r) => s + r.quantity, 0));
+    for (const [, grp] of prodGroups) grp.sort((a, b) => {
+      const va = a[sortKey], vb = b[sortKey];
+      return (typeof va === "number" ? va - vb : String(va).localeCompare(String(vb), "fr")) * sortDir;
+    });
+    const card = document.createElement("div");
+    card.className = "client-card" + (productSelected || openSet.has(client) || sorted.length === 1 ? " open" : "");
+    card.innerHTML =
+      '<div class="client-head">' +
+        '<div><div class="cname">' + client + '</div>' +
+        '<div class="cmeta">' + list.length + " lot" + (list.length > 1 ? "s" : "") + (bio ? " · " + bio + " BIO" : "") + "</div></div>" +
+        '<div class="ctotal">' + fmt(tot) + " kg</div>" +
+      "</div>" +
+      '<div class="client-body"><table><thead><tr>' +
+        '<th data-k="lot">Lot</th><th data-k="product">Produit</th><th data-k="root">Catégorie</th>' +
+        '<th data-k="location">Emplacement</th><th data-k="bio">BIO</th><th data-k="expiration">Expiration</th>' +
+        '<th class="num" data-k="quantity">Qté</th>' +
+      "</tr></thead><tbody>" +
+      prodGroups.map(([prod, grp]) =>
+        grp.map(r =>
+          "<tr class='lot-row' data-lot=\"" + String(r.lot).replace(/"/g, "&quot;") + "\"><td class='lotname'>" + r.lot +
+          (r.contenants && r.contenants.length ? " <span class='cont-count'>" + r.contenants.length + " cont.</span>" : "") +
+          "</td><td>" + r.product + "</td><td>" + catBadge(r) + "</td>" +
+          "<td class='loc'>" + r.location + "</td>" +
+          "<td>" + (r.bio ? '<span class="badge bio">BIO</span>' : "") + "</td>" +
+          "<td" + (r.expiration && r.expiration <= soonStr ? ' class="exp-soon"' : "") + ">" + (r.expiration || "–") + "</td>" +
+          "<td class='num'>" + fmt(r.quantity) + " " + r.uom + "</td></tr>"
+        ).join("") +
+        (grp.length > 1
+          ? "<tr class='subtotal'><td colspan='6'>Sous-total " + prod + " (" + grp.length + " lots)</td>" +
+            "<td class='num'>" + fmt(grp.reduce((s, r) => s + r.quantity, 0)) + " " + grp[0].uom + "</td></tr>"
+          : "")
+      ).join("") +
+      "</tbody></table></div>";
+    card.querySelector(".client-head").addEventListener("click", () => {
+      card.classList.toggle("open");
+      const open = [...document.querySelectorAll(".client-card.open .cname")].map(e => e.textContent);
+      sessionStorage.setItem("openClients", JSON.stringify(open));
+    });
+    card.querySelectorAll("th").forEach(th => th.addEventListener("click", e => {
+      e.stopPropagation();
+      const k = th.dataset.k;
+      if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = k === "quantity" ? -1 : 1; }
+      render();
+    }));
+    container.appendChild(card);
+  }
+}
+
+async function init() {
+  try {
+    await loadData();
+    fillSelect("fProduct", [...new Set(rows.map(r => r.product))].sort((a, b) => a.localeCompare(b, "fr")));
+    fillSelect("fClient", [...new Set(rows.map(r => r.client))].sort((a, b) => a.localeCompare(b, "fr")));
+    fillSelect("fCat", [...new Set(rows.map(r => r.root))].sort());
+    fillSelect("fLoc", [...new Set(rows.flatMap(r => r.locations))].sort());
+    restoreFilters();
+    document.getElementById("status").style.display = "none";
+    document.getElementById("app").style.display = "";
+    document.getElementById("loadedAt").textContent = "Actualisé le " + new Date().toLocaleString("fr-FR");
+    render();
+  } catch (e) {
+    document.getElementById("status").innerHTML = '<div class="err">Erreur de chargement Odoo :\n' + (e.message || e) + "</div>";
+  }
+}
+
+["fSearch", "fProduct", "fClient", "fCat", "fLoc"].forEach(id =>
+  document.getElementById(id).addEventListener("input", render));
+document.querySelectorAll("#mode button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#mode button").forEach(x => x.classList.remove("on"));
+  b.classList.add("on");
+  document.body.classList.toggle("mode-product", b.dataset.m === "product");
+  render();
+}));
+document.querySelectorAll("#fBio button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#fBio button").forEach(x => x.classList.remove("on"));
+  b.classList.add("on"); render();
+}));
+document.getElementById("fReset").addEventListener("click", () => {
+  document.getElementById("fSearch").value = "";
+  ["fProduct", "fClient", "fCat", "fLoc"].forEach(id => document.getElementById(id).value = "");
+  document.querySelectorAll("#fBio button").forEach(x => x.classList.toggle("on", x.dataset.v === ""));
+  render();
+});
+
+/* ---------- Onglet Réceptions ---------- */
+let recRows = null, recChart = null, recLoading = false;
+
+async function loadReceptions() {
+  const lines = await odoo("stock.move.line", "search_read", {
+    domain: [["picking_code", "=", "incoming"], ["state", "=", "done"], ["product_id.categ_id", "child_of", CATS]],
+    fields: ["date", "product_id", "lot_id", "quantity", "product_uom_id", "picking_id", "picking_partner_id", "owner_id"],
+    limit: 10000, order: "date desc"
+  });
+  const prodIds = [...new Set(lines.map(l => l.product_id[0]))];
+  const lotIds = [...new Set(lines.filter(l => l.lot_id).map(l => l.lot_id[0]))];
+  const [products, lots] = await Promise.all([
+    prodIds.length ? odoo("product.product", "read", { ids: prodIds, fields: ["display_name", "categ_id"] }) : [],
+    lotIds.length ? odoo("stock.lot", "read", { ids: lotIds, fields: ["x_studio_bio"] }) : []
+  ]);
+  const prodById = Object.fromEntries(products.map(p => [p.id, p]));
+  const bioByLot = Object.fromEntries(lots.map(l => [l.id, !!l.x_studio_bio]));
+  recRows = lines.map(l => {
+    const prod = prodById[l.product_id[0]] || {};
+    const categName = prod.categ_id ? prod.categ_id[1] : "?";
+    return {
+      date: String(l.date).slice(0, 10),
+      product: prod.display_name || l.product_id[1],
+      root: rootCat(categName),
+      client: (l.picking_partner_id && l.picking_partner_id[1]) || (l.owner_id && l.owner_id[1]) || "Non attribué",
+      lot: l.lot_id ? l.lot_id[1] : "–",
+      picking: l.picking_id ? l.picking_id[1] : "–",
+      quantity: l.quantity,
+      uom: l.product_uom_id ? l.product_uom_id[1] : "kg",
+      bio: l.lot_id ? bioByLot[l.lot_id[0]] || false : false
+    };
+  }).filter(r => r.quantity > 0);
+}
+
+function recPeriod() {
+  const p = document.getElementById("rPeriod").value;
+  const today = new Date();
+  const iso = d => d.toISOString().slice(0, 10);
+  const y = today.getFullYear(), m = today.getMonth();
+  if (p === "this_month") return [iso(new Date(y, m, 1)), iso(new Date(y, m + 1, 0))];
+  if (p === "last_month") return [iso(new Date(y, m - 1, 1)), iso(new Date(y, m, 0))];
+  if (p === "this_year") return [y + "-01-01", y + "-12-31"];
+  if (p === "last_year") return [(y - 1) + "-01-01", (y - 1) + "-12-31"];
+  if (p === "last_30") { const d = new Date(today); d.setDate(d.getDate() - 30); return [iso(d), iso(today)]; }
+  if (p === "custom") return [document.getElementById("rFrom").value || "0000", document.getElementById("rTo").value || "9999"];
+  return ["0000", "9999"];
+}
+
+function renderRec() {
+  if (!recRows) return;
+  const [from, to] = recPeriod();
+  const client = document.getElementById("rClient").value;
+  const cat = document.getElementById("rCat").value;
+  const search = document.getElementById("rSearch").value.trim().toLowerCase();
+  try { localStorage.setItem("recFilters", JSON.stringify({ period: document.getElementById("rPeriod").value })); } catch (e) {}
+
+  const data = recRows.filter(r =>
+    r.date >= from && r.date <= to &&
+    (!client || r.client === client) &&
+    (!cat || r.root === cat) &&
+    (!search || r.product.toLowerCase().includes(search) || r.lot.toLowerCase().includes(search))
+  );
+
+  document.getElementById("rKpiQty").textContent = fmt(data.reduce((s, r) => s + r.quantity, 0));
+  document.getElementById("rKpiOps").textContent = new Set(data.map(r => r.picking)).size;
+  document.getElementById("rKpiClients").textContent = new Set(data.map(r => r.client)).size;
+  document.getElementById("rKpiProducts").textContent = new Set(data.map(r => r.product)).size;
+
+  const byClient = new Map();
+  for (const r of data) {
+    if (!byClient.has(r.client)) byClient.set(r.client, []);
+    byClient.get(r.client).push(r);
+  }
+  const sorted = [...byClient.entries()].sort((a, b) =>
+    b[1].reduce((s, r) => s + r.quantity, 0) - a[1].reduce((s, r) => s + r.quantity, 0));
+
+  if (recChart) recChart.destroy();
+  recChart = new Chart(document.getElementById("rChart"), {
+    type: "bar",
+    data: {
+      labels: sorted.map(e => e[0]),
+      datasets: [{ label: "kg reçus", data: sorted.map(e => e[1].reduce((s, r) => s + r.quantity, 0)), backgroundColor: "#f59e0b" }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: "y",
+      scales: { y: { ticks: { autoSkip: false, font: { size: 11 } } } },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  const container = document.getElementById("rClients");
+  container.innerHTML = "";
+  if (!sorted.length) { container.innerHTML = '<div class="empty">Aucune réception sur cette période.</div>'; return; }
+  for (const [cl, list] of sorted) {
+    const tot = list.reduce((s, r) => s + r.quantity, 0);
+    // Sous-total par produit
+    const byProd = new Map();
+    for (const r of list) byProd.set(r.product, (byProd.get(r.product) || 0) + r.quantity);
+    const prodSummary = [...byProd.entries()].sort((a, b) => b[1] - a[1])
+      .map(e => e[0] + " " + fmt(e[1]) + " kg").join(" · ");
+    list.sort((a, b) => b.date.localeCompare(a.date));
+    const card = document.createElement("div");
+    card.className = "client-card" + (sorted.length === 1 ? " open" : "");
+    card.innerHTML =
+      '<div class="client-head">' +
+        '<div><div class="cname">' + cl + '</div>' +
+        '<div class="cmeta">' + list.length + " ligne" + (list.length > 1 ? "s" : "") + " · " + prodSummary + "</div></div>" +
+        '<div class="ctotal">' + fmt(tot) + " kg</div>" +
+      "</div>" +
+      '<div class="client-body"><table><thead><tr>' +
+        "<th>Date</th><th>Réception</th><th>Produit</th><th>Catégorie</th><th>Lot</th><th>BIO</th><th class='num'>Qté</th>" +
+      "</tr></thead><tbody>" +
+      list.map(r =>
+        "<tr><td>" + r.date.split("-").reverse().join("/") + "</td>" +
+        "<td class='loc'>" + r.picking + "</td><td>" + r.product + "</td><td>" + catBadge(r) + "</td>" +
+        "<td class='lotname'>" + r.lot + "</td>" +
+        "<td>" + (r.bio ? '<span class="badge bio">BIO</span>' : "") + "</td>" +
+        "<td class='num'>" + fmt(r.quantity) + " " + r.uom + "</td></tr>"
+      ).join("") +
+      "</tbody></table></div>";
+    card.querySelector(".client-head").addEventListener("click", () => card.classList.toggle("open"));
+    container.appendChild(card);
+  }
+}
+
+async function openReceptions() {
+  if (recRows || recLoading) { renderRec(); return; }
+  recLoading = true;
+  try {
+    await loadReceptions();
+    fillSelect("rClient", [...new Set(recRows.map(r => r.client))].sort((a, b) => a.localeCompare(b, "fr")));
+    fillSelect("rCat", [...new Set(recRows.map(r => r.root))].sort());
+    try {
+      const f = JSON.parse(localStorage.getItem("recFilters") || "{}");
+      if (f.period) document.getElementById("rPeriod").value = f.period;
+    } catch (e) {}
+    renderRec();
+  } catch (e) {
+    document.getElementById("rClients").innerHTML = '<div class="err">Erreur de chargement Odoo :\n' + (e.message || e) + "</div>";
+  } finally { recLoading = false; }
+}
+
+document.querySelectorAll(".fold-btns button").forEach(b => b.addEventListener("click", () => {
+  const open = b.dataset.open === "1";
+  document.querySelectorAll("#" + b.dataset.target + " .client-card")
+    .forEach(c => c.classList.toggle("open", open));
+  if (b.dataset.target === "clients") {
+    const names = open ? [...document.querySelectorAll("#clients .client-card .cname")].map(e => e.textContent) : [];
+    sessionStorage.setItem("openClients", JSON.stringify(names));
+  }
+}));
+
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("on"));
+  b.classList.add("on");
+  const t = b.dataset.t;
+  document.getElementById("tabStock").style.display = t === "stock" ? "" : "none";
+  document.getElementById("tabReceptions").style.display = t === "receptions" ? "" : "none";
+  if (t === "receptions") openReceptions();
+}));
+
+document.getElementById("rPeriod").addEventListener("input", () => {
+  const custom = document.getElementById("rPeriod").value === "custom";
+  document.getElementById("rFrom").style.display = custom ? "" : "none";
+  document.getElementById("rTo").style.display = custom ? "" : "none";
+  renderRec();
+});
+["rFrom", "rTo", "rClient", "rCat", "rSearch"].forEach(id =>
+  document.getElementById(id).addEventListener("input", renderRec));
+
+/* ---------- Modal détail lot + contenants ---------- */
+const contCache = {};
+
+function lmCell(lbl, val) {
+  return '<div class="lm-cell"><div class="lm-lbl">' + lbl + '</div><div class="lm-val">' + val + '</div></div>';
+}
+
+function closeLotModal() { document.getElementById("lotModal").classList.remove("open"); }
+
+async function openLotModal(lotName) {
+  const r = rows.find(x => x.lot === lotName);
+  if (!r) return;
+  const modal = document.getElementById("lotModal");
+  const body = document.getElementById("lotModalBody");
+  modal.classList.add("open");
+  const ids = r.contenants || [];
+  body.innerHTML =
+    '<div class="lm-head">' +
+      '<div class="lm-title lotname">' + r.lot + (r.bio ? ' <span class="badge bio">BIO</span>' : "") + "</div>" +
+      '<div class="lm-sub">' + r.product + " · " + catBadge(r) + "</div>" +
+    "</div>" +
+    '<div class="lm-grid">' +
+      lmCell("Quantité en stock", fmt(r.quantity) + " " + r.uom) +
+      lmCell("Emplacement", r.location) +
+      lmCell("Client / fournisseur", r.client) +
+      lmCell("Expiration", r.expiration || "–") +
+      lmCell("Nombre de contenants", String(ids.length)) +
+    "</div>" +
+    '<div id="lmCont"><div class="empty">Chargement des contenants…</div></div>';
+  if (!ids.length) {
+    document.getElementById("lmCont").innerHTML = '<div class="empty">Aucun contenant enregistré pour ce lot.</div>';
+    return;
+  }
+  try {
+    const missing = ids.filter(id => !contCache[id]);
+    if (missing.length) {
+      const fetched = await odoo("x_contenants", "read", {
+        ids: missing,
+        fields: ["x_studio_type", "x_studio_poids", "x_studio_uom", "x_studio_tailletype_preparation", "x_studio_code_barre", "x_studio_odf"]
+      });
+      for (const c of fetched) contCache[c.id] = c;
+    }
+    const conts = ids.map(id => contCache[id]).filter(Boolean);
+    const totalPoids = conts.reduce((s, c) => s + (c.x_studio_poids || 0), 0);
+    document.getElementById("lmCont").innerHTML =
+      '<h3 class="lm-h3">' + conts.length + " contenant" + (conts.length > 1 ? "s" : "") + " · " + fmt(totalPoids) + " kg</h3>" +
+      "<table><thead><tr><th>#</th><th>Type</th><th>Préparation</th><th>Code-barre</th><th>ODF</th><th class='num'>Poids</th></tr></thead><tbody>" +
+      conts.map((c, i) =>
+        "<tr><td>" + (i + 1) + "</td>" +
+        "<td>" + (c.x_studio_type ? c.x_studio_type[1] : "–") + "</td>" +
+        "<td>" + (c.x_studio_tailletype_preparation ? c.x_studio_tailletype_preparation[1] : "–") + "</td>" +
+        "<td class='lotname'>" + (c.x_studio_code_barre || "–") + "</td>" +
+        "<td class='loc'>" + (c.x_studio_odf ? c.x_studio_odf[1] : "–") + "</td>" +
+        "<td class='num'>" + fmt(c.x_studio_poids || 0) + " " + (c.x_studio_uom ? c.x_studio_uom[1] : "kg") + "</td></tr>"
+      ).join("") +
+      "</tbody></table>";
+  } catch (e) {
+    document.getElementById("lmCont").innerHTML = '<div class="err">Erreur chargement contenants :\n' + (e.message || e) + "</div>";
+  }
+}
+
+document.getElementById("clients").addEventListener("click", e => {
+  const tr = e.target.closest("tr.lot-row");
+  if (tr && tr.dataset.lot) openLotModal(tr.dataset.lot);
+});
+document.getElementById("lotModalClose").addEventListener("click", closeLotModal);
+document.getElementById("lotModal").addEventListener("click", e => { if (e.target.id === "lotModal") closeLotModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeLotModal(); });
+
+init();
+</script>
+</body>
+</html>
